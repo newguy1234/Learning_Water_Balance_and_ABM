@@ -1,0 +1,28 @@
+# pip install -r requirements.txt
+#
+# ipyvuetify and ipyvue are pinned below 2: Solara 1.61 is built on Vuetify 2, and pip will
+# otherwise pull ipyvuetify 3.x (Vuetify 3), which renders the interface's tab content inside
+# the tab bar and leaves the page body empty.
+solara==1.61.0
+ipyvuetify==1.11.3
+ipyvue==1.12.0
+mesa>=3.3,<4
+altair
+numpy
+pandas
+scipy
+xarray
+netCDF4
+geopandas
+shapely
+pyogrio
+duckdb
+matplotlib
+requests
+# Copernicus Data Space downloads (also: pip install -e ".[copernicus]")
+# Then: python -m cyclic copernicus register
+# Optional IBM Quantum / QAOA (cyclic.quantum). Not required for the classical finder.
+# qiskit
+# qiskit-aer
+# qiskit-ibm-runtime
+

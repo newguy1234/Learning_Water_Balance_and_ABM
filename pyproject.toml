@@ -1,0 +1,108 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cyclic-irrigation"
+version = "0.2.0"
+description = "Gymnasium environment for leftover water-fate learning under cyclic irrigation (Imbanuma / Okura 2025). Target venue: Environmental Modelling & Software."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Cyclic irrigation contributors" }]
+keywords = [
+  "gymnasium",
+  "environmental-modelling",
+  "irrigation",
+  "copernicus",
+  "sentinel-2",
+  "hydrology",
+  "reinforcement-learning",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Hydrology",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "numpy",
+  "pandas",
+  "scipy",
+  "requests",
+]
+
+[project.optional-dependencies]
+# Gymnasium + spatial stack required to reset Cyclic-Imbanuma-v0 (pixel ET / parcels).
+gym = [
+  "gymnasium>=0.29",
+  "geopandas",
+  "shapely",
+  "pyogrio",
+  "xarray",
+  "netCDF4",
+]
+copernicus = [
+  "requests>=2.28",
+]
+geo = [
+  "geopandas",
+  "shapely",
+  "pyogrio",
+  "xarray",
+  "netCDF4",
+]
+ui = [
+  "solara==1.61.0",
+  "ipyvuetify==1.11.3",
+  "ipyvue==1.12.0",
+  "matplotlib",
+]
+# Recommended install for the Environmental Modelling & Software software paper.
+ems = [
+  "cyclic-irrigation[gym,copernicus]",
+]
+# Lightweight ABM on the pip-shipped physics bundle (no observed IR/D).
+# UI uses the same Solara stack as cyclic's interface; farmers/station are
+# mesa.Agent instances on a mesa.Model (abm.model.DistrictModel), so `mesa-ui`
+# can also run mesa.visualization.SolaraViz directly (needs altair).
+abm = [
+  "cyclic-irrigation[ui,geo]",
+  "mesa>=3.3,<4",
+  "altair",
+]
+all = [
+  "cyclic-irrigation[gym,copernicus,ui,abm]",
+]
+
+[project.scripts]
+cyclic = "cyclic.__main__:main"
+cyclic-copernicus = "cyclic.copernicus:main"
+abm = "abm.__main__:main"
+
+[project.entry-points."gymnasium.envs"]
+Cyclic-Imbanuma-v0 = "cyclic.gym_env:CyclicGym"
+Cyclic-Imbanuma-Open-v0 = "cyclic.gym_env:CyclicGym"
+Abm-Imbanuma-v0 = "abm.gym_env:AbmEnv"
+
+[project.urls]
+Documentation = "https://documentation.dataspace.copernicus.eu/"
+Copernicus = "https://dataspace.copernicus.eu/"
+Paper = "outputs/paper/ems_cyclic_env_journal.md"
+
+[tool.setuptools.packages.find]
+include = ["cyclic*", "abm*"]
+
+[tool.setuptools.package-data]
+cyclic = [
+  "py.typed",
+  "bundled/*.json",
+  "bundled/*.nc",
+  "bundled/*.geojson",
+  "bundled/*.csv",
+  "bundled/*.md",
+  "bundled/ems/*",
+]
+abm = ["py.typed"]

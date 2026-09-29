@@ -1,0 +1,9 @@
+{
+  "python": "3.14.0",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "AMD64 Family 26 Model 96 Stepping 0, AuthenticAMD",
+  "cyclic": "0.2.0",
+  "numpy": "2.5.2",
+  "pandas": "3.0.5",
+  "gymnasium": "1.3.0"
+}

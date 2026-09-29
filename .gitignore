@@ -1,0 +1,12 @@
+# Local / generated
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.cyclic/
+*.egg-info/
+dist/
+build/
+
+# Downloaded Copernicus SAFE zips (large)
+data/copernicus/
