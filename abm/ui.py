@@ -347,7 +347,7 @@ def Header():
         _stat("Farmers", f"{w.n_farmers():,}"),
         _stat("Pool", f"{w.pool_m3:,.0f} m³"),
         _stat("Ya/Ym", f"{w.relative_yield.mean():.2f}"),
-        _stat("Groundwater", "cyclic.physics soil"),
+        _stat("Groundwater", "stem.water ratios"),
     ])
     solara.HTML(tag="div", classes=["abm-stats"], unsafe_innerHTML=tiles)
     solara.HTML(tag="div", classes=["abm-status"], unsafe_innerHTML=status_text.value)
@@ -728,11 +728,10 @@ def Page():
 
 def serve(script=None, port=8770, open_browser=True, reload=False):
     """Launch the ABM UI (blocks until Ctrl+C)."""
-    import cyclic
+    from .serve import serve as _serve
 
-    target = os.path.abspath(script) if script else os.path.abspath(__file__)
-    return cyclic.serve(script=target, port=port, open_browser=open_browser, reload=reload)
+    return _serve(script or __file__, port=port, open_browser=open_browser, reload=reload)
 
 
-# Solara entry: `solara run abm/ui.py` or cyclic.serve(this file)
+# Solara entry: `solara run abm/ui.py` or abm.serve()
 Page  # noqa: B018 — Solara discovers Page in module scope

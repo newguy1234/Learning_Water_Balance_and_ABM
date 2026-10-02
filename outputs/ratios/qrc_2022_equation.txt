@@ -1,7 +1,0 @@
-Daily QRC leftover ratios - 2022 - reservoir statevector (IBM failed: Set IBM_QUANTUM_TOKEN or QISKIT_IBM_TOKEN for IBM Quantum)
-Season-mean Kx=0.418 Ky=0.418 Kz=0.163 ground=0.000
-QRC vs two-box target RMSE=0.0518  stay RMSE=0.0539
-S_top(t+1) = +1.6421 1 +0.9150 S(t) +0.2147 stay(t)*L+(t) +0.0189 ET(t) -0.0244 rain(t)    (R^2=0.983)
-stay(t) = kz+ground ~= +0.186 1 +8.212e-05 rain -0.0004934 irrigation +0.0005005 drainage -0.002226 et +0.001314 leftover -0.001148 leftover_lag -0.0004112 inflow -0.004676 season_frac    (R^2=0.137)
-Stay share moves with the day: use stay(t) in the S(t+1) update, not a single Table 4/5 constant.
-Held-out 2021: RMSE=0.1028 stay RMSE=0.1017

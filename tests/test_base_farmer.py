@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import abm
-from abm import crop
+from stem import crop
 from abm.agents import AGENTS, make_agent
 from abm.farmer import BaseFarmer, NoDrainHold, in_drain_window
 
@@ -179,12 +179,12 @@ def test_experience_damps_the_reaction_to_a_stressed_day():
 
 
 def test_weir_board_spills_above_the_crest():
-    from cyclic.physics import Physics, State, advance
+    from stem import water
 
-    p = Physics().replace(bund_mm=250.)
-    s = State.start(2, 0., 10.)
-    s.water[:] = 100.
-    flux = advance(s, 0., 0., .5, np.zeros(2), np.zeros(2), p, weir_mm=np.array([60., np.inf]))
+    ratios = water.Ratios.uniform(2, kz=0.0)
+    grid = water.Grid(np.full((2, 4), -1), np.ones(2))
+    _, _, flux = water.step_numpy(np.full(2, 100.), np.zeros(2), 0., 0., 0., 0., ratios, grid,
+                                  weir=np.array([60., np.inf]))
     assert flux["discharge_mm"][0] == pytest.approx(40.)
     assert flux["discharge_mm"][1] == 0.
 
@@ -193,7 +193,7 @@ def test_world_runs_each_paddy_on_its_owners_calendar():
     from abm.model import DistrictModel
     from abm.world import SeasonConfig
 
-    model = DistrictModel(SeasonConfig(use_cyclic_map=False, days=3, paddies_per_farmer=6, seed=2))
+    model = DistrictModel(SeasonConfig(days=3, paddies_per_farmer=200, seed=2))
     model.step()
     shifts = model.world.calendar_shift_days
     for fid, agent in model.farmer_agents.items():

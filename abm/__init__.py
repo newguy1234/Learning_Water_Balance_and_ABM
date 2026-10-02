@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Agent-based models on frozen cyclic physics (conceptual twin gym).
+"""Agent-based model of the cyclic district: farmer archetypes and an LID station on the
+same paddies and water balance as the cyclic package (cyclic.district, cyclic.water).
 
     python -m abm ui
     python example.py abm      # with the farmer + station registered in example.py
@@ -36,22 +37,17 @@ from .station import (
 )
 from .metrics import season_efficiencies, summarise_run
 from .simulate import run_season, compare_agents
-from .landscape import load_cyclic_landscape, landscape_summary, CyclicLandscape
 from .field import FieldSession
 from .model import DistrictModel, FarmerMesaAgent, StationMesaAgent
 from .optimise import MPCStation
-from .gym_env import AbmEnv
-from .weather import WeatherScenario, weather_scenario, list_weather_scenarios
-from . import crop
+from stem.weather import WeatherScenario, weather_scenario, list_weather_scenarios
+from stem import crop
 
 __all__ = [
     "WaterWorld",
     "SeasonConfig",
     "StepResult",
     "assign_owners",
-    "load_cyclic_landscape",
-    "landscape_summary",
-    "CyclicLandscape",
     "AGENTS",
     "BaseFarmer",
     "Constraint",
@@ -83,7 +79,6 @@ __all__ = [
     "FarmerMesaAgent",
     "StationMesaAgent",
     "MPCStation",
-    "AbmEnv",
     "WeatherScenario",
     "weather_scenario",
     "list_weather_scenarios",

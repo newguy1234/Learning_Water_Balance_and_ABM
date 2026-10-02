@@ -92,7 +92,7 @@ def _district_outline():
 
         import geopandas as gpd
 
-        from cyclic.data import DATA
+        from stem.params import DATA
 
         path = os.path.join(DATA, "district_outline_okura.geojson")
         if not os.path.exists(path):
@@ -103,9 +103,9 @@ def _district_outline():
 
 def draw_infrastructure(ax, key=True):
     """Drainage channels, culverts, structures and the pumping station, with a key saying
-    what is what (``cyclic.infrastructure.draw``). The key sits below the map."""
+    what is what (``stem.infrastructure.draw``). The key sits below the map."""
     try:
-        from cyclic import infrastructure
+        from stem import infrastructure
     except Exception:
         return []
     handles = infrastructure.draw(ax, key=False)
@@ -138,7 +138,7 @@ def figure_field(world, mode: str = "ponding", selected: int | None = None,
     ax.set_facecolor("#efeae2")
 
     vals, title, cmap, label = _values_for_mode(world, mode)
-    use_map = bool(getattr(world.config, "use_cyclic_map", False)) and hasattr(world, "lon")
+    use_map = hasattr(world, "lon")
     keep = np.ones(world.n, dtype=bool) if block is None else (np.asarray(world.block) == block)
     if block is not None:
         title = f"{block} field · {title}"
@@ -146,7 +146,7 @@ def figure_field(world, mode: str = "ponding", selected: int | None = None,
     if use_map:
         station = getattr(world, "station_lonlat", None)
         if station is None:
-            from cyclic.data import POOL_LONLAT as station
+            from stem.infrastructure import STATION_LONLAT as station
 
         lon, lat = world.lon, world.lat
         geometry = getattr(world, "geometry", None)

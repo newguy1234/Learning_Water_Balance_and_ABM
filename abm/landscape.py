@@ -1,6 +1,5 @@
-"""ABM consumption of the cyclic package per-paddy NetCDF contract."""
+"""Who owns which paddy: farmer holdings scattered across the district."""
 import numpy as np
-from cyclic.paddy_export import CyclicLandscape, load_cyclic_landscape
 
 
 def assign_owners_along_canal(order: np.ndarray, n: int, paddies_per_farmer: int) -> np.ndarray:
@@ -54,19 +53,3 @@ def assign_owners_along_canal_variable(
         farmer += 1
         start += size
     return owners
-
-
-def landscape_summary(land: CyclicLandscape) -> dict:
-    return {
-        "n_paddies": land.n,
-        "year": land.year,
-        "n_cyclic": int(land.cyclic.sum()),
-        "capture_mean": float(land.capture_i[land.cyclic].mean()) if land.cyclic.any() else 0.0,
-        "neighbour_mean": float(land.neighbour_i[land.cyclic].mean()) if land.cyclic.any() else 0.0,
-        "stay_mean": float(land.stay_i[land.cyclic].mean()) if land.cyclic.any() else 0.0,
-        "joint_capture": float(land.physics.capture),
-        "claim": land.claim[:120],
-        "hop": getattr(land.hop, "name", "head_equalise"),
-        "north": int((land.block == "North").sum()),
-        "south": int((land.block == "South").sum()),
-    }

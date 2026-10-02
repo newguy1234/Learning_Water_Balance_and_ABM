@@ -13,7 +13,7 @@ Design (see the references at the end of this docstring):
                    leaves every other trait, the ownership and the schedules identical.
                    The effect is the paired difference high − low for the same seed
                    (common random numbers), so seed-to-seed noise cancels.
-  weather          each abm.weather preset vs baseline weather, paired by seed.
+  weather          each stem.weather preset vs baseline weather, paired by seed.
   pump shortage    the pumping station limited to SHORTAGE_PUMP_FRACTION of its MAFF
                    capacity, so the canal cannot meet demand and crops go short of
                    water. At full capacity no paddy is ever stressed, which leaves the
@@ -123,7 +123,6 @@ class RunSpec:
     value: float | None = None
     year: int = 2022
     days: int | None = None
-    use_cyclic_map: bool = True
     paddies_per_farmer: int = 50
     pump_fraction: float = 1.0         # share of the station's pump capacity
 
@@ -140,7 +139,7 @@ class RunSpec:
 def build_plan(seeds=(0, 1, 2), traits=None, weathers=None, interactions: bool = False,
                shortage: bool = True, **common) -> list[RunSpec]:
     """Every run the sensitivity tests need; duplicates (the shared baselines) dropped."""
-    from .weather import list_weather_scenarios
+    from stem.weather import list_weather_scenarios
 
     traits = list(traits or [t.name for t in TRAITS])
     weathers = list(weathers or list_weather_scenarios())
@@ -181,7 +180,7 @@ def _build_model(spec: RunSpec):
     if pump is not None and spec.pump_fraction < 1:
         pump = float(pump) * spec.pump_fraction
     cfg = SeasonConfig(year=spec.year, days=spec.days, seed=spec.seed, ownership_seed=spec.seed,
-                       use_cyclic_map=spec.use_cyclic_map, paddies_per_farmer=spec.paddies_per_farmer,
+                       paddies_per_farmer=spec.paddies_per_farmer,
                        weather=spec.weather, pump_capacity_m3_s=pump)
     model = DistrictModel(cfg, agent_roster=list(DEFAULT_ROSTER), seed=spec.seed)
     if spec.trait is not None:

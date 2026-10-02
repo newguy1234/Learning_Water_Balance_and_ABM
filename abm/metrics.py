@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from cyclic import okura
+from stem import okura
 
 
 def history_to_frame(world) -> pd.DataFrame:
@@ -104,8 +104,7 @@ def season_efficiencies(world) -> dict:
     cyc_wue = float(np.average([wue["North"], wue["South"]],
                                weights=[world.area_m2[cyc & (world.block == b)].sum() for b in ("North", "South")]))         if cyc_area.size else float("nan")
 
-    pins = getattr(world.physics, "efficiency_pins", {}) or {}
-    pin = pins.get(str(world.config.year), {})
+    pin = okura.TABLE6.get(int(world.config.year), {})   # Okura Table 6 reuse ratios
 
     sent = np.stack([s.irrigation_sent_mm for s in world.history], axis=0)
     sent_total = float((sent * world.area_m2 / 1000.0).sum())
@@ -219,7 +218,7 @@ def record_farmer_performance(model, step):
 
 def farmer_performance(model, *, statuses=None, blocks=None, farmer_types=None, rank_by="score") -> pd.DataFrame:
     """Area-weight within farms; accumulate over recorded days for each ownership cohort."""
-    from .crop import season_relative_yield
+    from stem.crop import season_relative_yield
     records = pd.DataFrame(model.farmer_performance_history)
     if records.empty:
         return pd.DataFrame()

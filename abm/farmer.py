@@ -4,7 +4,7 @@
 A farmer owns paddies. Each day it asks the canal for water (``request``), takes what the
 station actually sent (``apply`` ≤ sent), may discharge (``drain``) and sets its outlet
 weir board (``weir``: pond above the crest spills out through the outlet on its own, see
-``cyclic.physics.advance(weir_mm=...)``). ``BaseFarmer.act`` returns all four as a
+``stem.water.step(weir=...)``). ``BaseFarmer.act`` returns all four as a
 ``Plan`` after enforcing the hard constraints, whatever a subclass decided.
 
 Common personality variables (``TRAITS``) live on every farmer as ``self.traits``. Each is
@@ -55,7 +55,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import crop
+from stem import crop
 
 
 @dataclass(frozen=True)

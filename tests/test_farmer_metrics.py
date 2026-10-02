@@ -6,7 +6,7 @@ from abm.metrics import farmer_performance, farmer_type_performance, best_farmer
 
 
 def test_farmer_metrics_aggregate_and_reset():
-    m=DistrictModel(SeasonConfig(use_cyclic_map=False, days=3, paddies_per_farmer=3))
+    m=DistrictModel(SeasonConfig(days=3, paddies_per_farmer=3))
     assert farmer_performance(m).empty
     for _ in range(3): m.step()
     farms=farmer_performance(m)
@@ -28,7 +28,7 @@ def test_farmer_metrics_aggregate_and_reset():
 
 
 def test_roster_change_preserves_historical_labels():
-    m=DistrictModel(SeasonConfig(use_cyclic_map=False, days=2,paddies_per_farmer=3),agent_roster=['steward'])
+    m=DistrictModel(SeasonConfig(days=2,paddies_per_farmer=3),agent_roster=['steward'])
     m.step()
     m.set_roster(['guardian'])
     m.step()
@@ -38,9 +38,7 @@ def test_roster_change_preserves_historical_labels():
 
 
 def test_mixed_holdings_filters_and_recombination():
-    m=DistrictModel(SeasonConfig(use_cyclic_map=False,days=2,paddies_per_farmer=36),agent_roster=['steward'])
-    m.world.cyclic[::2]=False
-    m.world.area_m2=np.arange(1,37,dtype=float)*1000
+    m=DistrictModel(SeasonConfig(days=2,paddies_per_farmer=4002),agent_roster=['steward'])
     for _ in range(2): m.step()
     all_farms=farmer_performance(m)
     cyclic=farmer_performance(m,statuses=['Cyclic'])
@@ -60,7 +58,7 @@ def test_mixed_holdings_filters_and_recombination():
 
 
 def test_alternative_ranking():
-    m=DistrictModel(SeasonConfig(use_cyclic_map=False,days=2,paddies_per_farmer=3))
+    m=DistrictModel(SeasonConfig(days=2,paddies_per_farmer=3))
     m.step()
     assert best_farmers(m,rank_by='irrigation_mm').irrigation_mm.is_monotonic_increasing
     assert farmer_type_performance(m,rank_by='relative_yield_pct').relative_yield_pct.is_monotonic_decreasing

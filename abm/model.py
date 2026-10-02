@@ -9,10 +9,10 @@ holds the real vectorized state and advances it).
         model.step()
 
 A step, in order:
-  1. the station agent observes pool/lake/field deficit and dispatches -> WaterWorld.apply_station
+  1. the station agent observes pool/lake/field deficit and dispatches -> Field.apply_station
   2. every farmer agent observes its own paddies and decides apply_mm / discharge_mm
-  3. WaterWorld.step() moves the water with cyclic.physics.advance (ET, D, percolation,
-     perched exchange, Hooghoudt lateral), recaptures lateral flow, settles the pool
+  3. Field.day_step() moves the water with stem.water (ET, discharge, infiltration, soil
+     water routed by each paddy's ratios), returns lateral flow to the pool, settles it
 """
 
 from __future__ import annotations
@@ -77,8 +77,9 @@ class StationMesaAgent(mesa.Agent):
         self.model.world.apply_station(action)
 
 
-class DistrictModel(mesa.Model):
-    """Mesa model: WaterWorld physics + a FarmerMesaAgent per farmer + one StationMesaAgent."""
+class DistrictModel(WaterWorld):
+    """One Mesa model: stem's water world (Paddy agents, pool, station hardware) + farm
+    holdings + a FarmerMesaAgent per farmer + one StationMesaAgent. `world` is itself."""
 
     def __init__(
         self,
@@ -88,8 +89,8 @@ class DistrictModel(mesa.Model):
         station_name: str | None = None,
         seed: int = 0,
     ):
-        super().__init__(seed=seed)
-        self.world = WaterWorld(config or SeasonConfig(seed=seed))
+        WaterWorld.__init__(self, config or SeasonConfig(seed=seed), seed=seed)
+        self.world = self
         self.agent_roster: list[str] = list(agent_roster or default_roster())
         self.roster_weights: dict[str, float] = dict(roster_weights or {})
         # None → abm.station.default_station(): a user-registered station, else "mpc".
@@ -207,11 +208,11 @@ class DistrictModel(mesa.Model):
             self.station_agent.policy = make_station(self.station_name, **kwargs)
 
     def set_paddies_per_farmer(self, value: int) -> None:
-        self.world.set_paddies_per_farmer(int(value))
+        WaterWorld.set_paddies_per_farmer(self, int(value))
         self._spawn_farmers()
 
     def set_farm_size_variability(self, value: float) -> None:
-        self.world.set_farm_size_variability(float(value))
+        WaterWorld.set_farm_size_variability(self, float(value))
         self._spawn_farmers()
 
     def set_farmer_agent(self, farmer_id: int, agent_name: str, **kwargs) -> None:
@@ -266,8 +267,8 @@ class DistrictModel(mesa.Model):
             self.world.apply_station(station_action)
         for agent in self.farmer_agents.values():
             agent.step()
-        result = self.world.step(self.pending_ir, self.pending_dr, weir_mm=self.pending_weir,
-                                 requested_mm=self.pending_request)
+        result = self.day_step(self.pending_ir, self.pending_dr, weir_mm=self.pending_weir,
+                               requested_mm=self.pending_request)
         for fid, agent in self.farmer_agents.items():
             if hasattr(agent.policy, "record_outcome"):
                 agent.policy.record_outcome(self.world, self.world.paddies_of(fid))
@@ -275,11 +276,8 @@ class DistrictModel(mesa.Model):
         self.farmer_performance_history.extend(record_farmer_performance(self, result))
         return result
 
-    def done(self) -> bool:
-        return self.world.done()
-
     def reset(self) -> dict:
-        obs = self.world.reset()
+        obs = WaterWorld.reset(self)
         self.farmer_performance_history = []
         self.farmer_cohort = -1
         self._spawn_station()

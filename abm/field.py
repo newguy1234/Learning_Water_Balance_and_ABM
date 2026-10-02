@@ -37,7 +37,6 @@ class FieldSession:
     roster_weights: dict[str, float] = field(default_factory=dict, repr=False)
     # None → abm.station.default_station(): a user-registered station, else "mpc".
     station_name: str | None = None
-    use_cyclic_map: bool = True
     # 0 = replay that year's historical Open-Meteo record exactly; >0 (e.g. 0.3)
     # jitters rain/ET0 day to day so weather differs each seed/reset — an input
     # no farmer or station policy controls. See world.perturb_weather.
@@ -57,7 +56,6 @@ class FieldSession:
             seed=self.seed,
             paddies_per_farmer=self.paddies_per_farmer,
             farm_size_variability=self.farm_size_variability,
-            use_cyclic_map=self.use_cyclic_map,
             weather_variability=self.weather_variability,
             collaborative_share=self.collaborative_share,
         )
@@ -193,10 +191,9 @@ class FieldSession:
             "et_mm": float(g.etc_mm),
             "mean_ponding_mm": float(w.ponding_mm.mean()),
             "claim": (w.claim[:80] + "…") if len(w.claim) > 80 else w.claim,
-            "use_cyclic_map": bool(w.config.use_cyclic_map),
             "n_cyclic": int(w.cyclic.sum()),
             "capture_mean": float(w.capture),
-            "using_real_ground_water_law": w.ground_water_law is not None,
+            "learned_ratios": bool(w.learned_ratios),
             "agents_available": list_agents(),
             "stations_available": list_stations(),
         }

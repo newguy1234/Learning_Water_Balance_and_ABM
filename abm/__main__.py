@@ -1,27 +1,10 @@
 # -*- coding: utf-8 -*-
-"""CLI: python -m abm ui|run|compare|physics"""
+"""CLI: python -m abm ui|run|compare|agents"""
 
 from __future__ import annotations
 
 import argparse
 import json
-
-
-def cmd_physics(_args):
-    from cyclic.bundle import has_bundled_physics, physics_as_namespace, bundled_path
-
-    if not has_bundled_physics():
-        print(f"missing bundle at {bundled_path()}")
-        print("run: python -m cyclic.bundle rebuild")
-        return 1
-    phys = physics_as_namespace()
-    print(f"bundle: {bundled_path()}")
-    print(f"capture={phys.capture:.4f} neighbour={phys.neighbour:.4f} stay={phys.stay:.4f}")
-    print(f"years={phys.years}")
-    pins = phys.efficiency_pins.get("2022", {})
-    if pins:
-        print(f"paper pins 2022: LUE={pins.get('LUE')} RUE_all={pins.get('RUE_all')}")
-    return 0
 
 
 def cmd_run(args):
@@ -74,12 +57,6 @@ def cmd_ui(args):
     return serve(port=args.port, open_browser=not args.no_browser) or 0
 
 
-def cmd_mesa_ui(args):
-    from .mesa_viz import serve
-
-    return serve(port=args.port, open_browser=not args.no_browser) or 0
-
-
 def cmd_agents(_args):
     from .agents import list_agents
 
@@ -89,11 +66,8 @@ def cmd_agents(_args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="abm", description="ABM on bundled cyclic physics")
+    parser = argparse.ArgumentParser(prog="abm", description="ABM of the cyclic district (stem water world)")
     sub = parser.add_subparsers(dest="cmd", required=True)
-
-    p = sub.add_parser("physics", help="show bundled capture / paper efficiency pins")
-    p.set_defaults(func=cmd_physics)
 
     p = sub.add_parser("agents", help="list registered farmer agents")
     p.set_defaults(func=cmd_agents)
@@ -102,11 +76,6 @@ def main(argv=None):
     p.add_argument("--port", type=int, default=8770)
     p.add_argument("--no-browser", action="store_true")
     p.set_defaults(func=cmd_ui)
-
-    p = sub.add_parser("mesa-ui", help="launch Mesa's own SolaraViz shell for the same model")
-    p.add_argument("--port", type=int, default=8775)
-    p.add_argument("--no-browser", action="store_true")
-    p.set_defaults(func=cmd_mesa_ui)
 
     p = sub.add_parser("run", help="run one season with a simple agent")
     p.add_argument("--agents", default="steward")

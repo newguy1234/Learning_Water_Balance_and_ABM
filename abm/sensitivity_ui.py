@@ -292,7 +292,7 @@ def VerdictsTab():
             f"**{n_pass} pass · {n_fail} fail · {n_leak} leak** of {len(allv)} expectations.  \n"
             "An effect counts when the paired high − low difference is significant across seeds "
             f"(p < 0.05) and at least 1 % of the base value. Expected signs are read off the rules in "
-            "`abm/farmer.py` and `abm/weather.py` (`EXPECTED`, `EXPECTED_SHORTAGE`, `EXPECTED_WEATHER` in "
+            "`abm/farmer.py` and `stem/weather.py` (`EXPECTED`, `EXPECTED_SHORTAGE`, `EXPECTED_WEATHER` in "
             "`abm/sensitivity.py`). The Trait guide tab explains each expectation.")
         solara.Markdown("**Traits (baseline weather, normal supply and pump shortage)**")
         cols = [("trait", "Trait"), ("scenario", "Scenario"), ("metric", "Output"), ("expected", "Expected"), ("low", "Low"),
@@ -573,7 +573,6 @@ def Page():
             f"## ABM sensitivity tests\n"
             f"`{d['path']}` · {len(runs)} season runs · seeds {meta.get('seeds')} · year {meta.get('year')} · "
             f"{int(runs.n_paddies.iloc[0]):,} paddies, {int(runs.n_farmers.iloc[0])} farmers · "
-            f"{'cyclic map' if meta.get('use_cyclic_map') else 'toy grid (weather presets have no effect)'} · "
             f"{meta.get('minutes', 0):.1f} min")
     names = list(TABS)
     with solara.lab.Tabs(value=selected_tab.value, on_value=selected_tab.set):
@@ -584,11 +583,11 @@ def Page():
 
 def serve(path: str | None = None, port: int = 8771, open_browser: bool = True):
     """Open this viewer on ``path`` (default: the newest batch). Blocks until Ctrl+C."""
-    import cyclic
+    from .serve import serve as _serve
 
     if path:
         os.environ[RESULTS_ENV] = os.path.abspath(path)
-    return cyclic.serve(script=os.path.abspath(__file__), port=port, open_browser=open_browser)
+    return _serve(__file__, port=port, open_browser=open_browser)
 
 
 Page  # noqa: B018 — Solara discovers Page in module scope

@@ -56,7 +56,7 @@ def test_personality_respects_ownership_and_supply(name):
 
 
 def model():
-    return DistrictModel(SeasonConfig(use_cyclic_map=False, days=6, paddies_per_farmer=3, seed=7))
+    return DistrictModel(SeasonConfig(days=6, paddies_per_farmer=3, seed=7))
 
 
 def test_snapshot_order_independence_reset_and_local_network():

@@ -10,7 +10,7 @@ baseline any learned or heuristic staff policy has to beat.
 
 Objective, per day (maximising Okura WUE' / RUE / LUE while protecting yield):
   * no paddy is short of water tomorrow (stress = weather ET demand the pond and
-    topsoil cannot supply, see ``cyclic.physics.supply_et_demand``);
+    topsoil cannot supply, see ``stem.water.step``);
   * irrigation is the *minimum* that achieves that — shallow ponds percolate and
     leak less (percolation ∝ depth), so less applied water is lost;
   * water already flowing back (pool + same-day cyclic D + recaptured lateral flow)
@@ -18,12 +18,12 @@ Objective, per day (maximising Okura WUE' / RUE / LUE while protecting yield):
   * the lake gate only opens for the remaining shortfall, and the pool is never
     pumped to the lake except ahead of flood rain (outflow O).
 
-Pond model used for the plan (the same processes as ``cyclic.physics.advance``,
+Pond model used for the plan (the same processes as ``stem.water.step``,
 with no farmer discharge assumed), per paddy with pond h₀, today's rain R₀, send s
 and ET demand E₀:
 
     end-of-day pond  h₁ = max(h₀ + R₀ + s − E₀, 0) · ρ,
-    ρ = (1 − outlet_loss) · (1 − K_pan / h_ref)      (leak, then plow-pan percolation)
+    ρ = 1 − kz                                       (the paddy's daily infiltration share)
 
 Tomorrow is stress-free if h₁ covers tomorrow's demand net of rain, plus a margin:
 h₁ ≥ max(E₁ − R₁, 0) + margin. Inverting gives the least send s for each paddy.
@@ -61,9 +61,9 @@ class MPCStation(StationAgent):
         demand = np.asarray(obs["et_demand_forecast_mm"], dtype=float)
         r0, r1 = float(rain[0]), float(rain[min(1, rain.size - 1)])
         e0, e1 = float(demand[0]), float(demand[min(1, demand.size - 1)])
-        keep = (1.0 - phys["outlet_loss_per_day"]) * (1.0 - min(phys["percolation_k_mm_d"] / phys["pond_ref_mm"], 0.95))
+        keep = np.maximum(np.asarray(phys["keep"], dtype=float), 0.05)   # pond left after kz
         need_end = max(e1 - r1, 0.0) + float(p["margin_mm"])
-        send = need_end / max(keep, 1e-6) + e0 - pond - r0
+        send = need_end / keep + e0 - pond - r0
         # Never plan a pond above the bund.
         send = np.minimum(send, phys["bund_mm"] - pond - r0 + e0)
         return np.clip(send, 0.0, float(p["max_send_mm"]))

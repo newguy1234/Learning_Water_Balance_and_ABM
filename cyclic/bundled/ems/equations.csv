@@ -1,9 +1,0 @@
-equation,form,scope,fitted on,n parameters,2021 RMSE mm,2022 RMSE mm,law
-neighbour trickle,head_equalise,general,-,0,0.0,0.015263802758619154,head equalise (physics baseline)
-neighbour trickle,linear,general,2021,14,0.006036063492678583,0.0015709734049852346,dL_i (neighbour trickle) = +0.000194 +0.0002907*drop_right +2.25e-05*drop_left -0.0009529*drop_up -0.001002*drop_down +6.201e-05*et_right +1.172e-05*et_left -7.119e-05*et_up +3.198e-05*et_down -9.76e-06*leftover_mm -6.682e-05*has_right -6.133e-05*has_left -6.199e-06*has_up -5.779e-05*has_down
-neighbour trickle,linear_paddy,per paddy,2021,68950,0.0011775646794925005,0.01971907797220023,"per-paddy dL_i: 4925 paddies x 14 weights (same drop/ET/leftover variables as the general trickle law; ridge fit, falls back to the general weights if a plot is singular)"
-neighbour trickle,nonlinear,general,2021,26,0.0057109235507833145,0.004993228836836509,"nonlinear neighbour trickle, 26 weights"
-recapture to pool,recapture,general,2021,9,1.3670175949482293,2.9773758454706614,to_pool_i (recapture / LFV) = -0.9882 -0.07303*leftover_mm +0.6381*infiltrated_mm +0.01111*has_right +0.005245*has_left -0.02844*has_up -0.04799*has_down +3.397*cyclic +9.728e-05*distance_m
-recapture to pool,recapture_paddy,per paddy,2021,44325,0.0019051595126411544,1.1079143876616173,per-paddy to_pool_i: 4925 paddies x 9 weights (same leftover/infiltration/distance variables as the general recapture law)
-stay in soil,stay,general,2021,9,1.3670175906898976,2.9773758754835833,stay_i (ground soil) = +0.9882 +1.073*leftover_mm -0.6381*infiltrated_mm -0.01111*has_right -0.005245*has_left +0.02844*has_up +0.04799*has_down -3.397*cyclic -9.728e-05*distance_m
-stay in soil,stay_paddy,per paddy,2021,44325,0.0019051502968464795,1.107914529039051,per-paddy stay_i: 4925 paddies x 9 weights (same leftover/infiltration/distance variables as the general stay law)
