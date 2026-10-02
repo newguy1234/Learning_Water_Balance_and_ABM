@@ -108,8 +108,9 @@ def _graph():
     from scipy.spatial import cKDTree
 
     snap = float(network().get("snap_m", 15.0))
+    features = channels(("main_canal", "connected_drain"))
     xs, ys, rows, cols, weights, way_of = [], [], [], [], [], []
-    for w, feature in enumerate(channels(("main_canal", "connected_drain"))):
+    for w, feature in enumerate(features):
         lon, lat = np.asarray(feature["geometry"]["coordinates"], dtype=float).T
         x, y = metres(lon, lat)
         # Densify so vertices sit every <= DENSIFY_M along the channel.
@@ -236,8 +237,11 @@ def draw(ax, roles=("river", "other_drain", "connected_drain", "main_canal", "ot
     frame = (ax.get_xlim(), ax.get_ylim()) if ax.has_data() else None
     shown = []
     for role in roles:
-        for feature in channels(role) if role != "other_pipeline" else [
-                f for f in network()["features"] if f["properties"].get("role") == "other_pipeline"]:
+        if role == "other_pipeline":
+            drawn = [f for f in network()["features"] if f["properties"].get("role") == "other_pipeline"]
+        else:
+            drawn = channels(role)
+        for feature in drawn:
             xs, ys = zip(*feature["geometry"]["coordinates"])
             style = dict(KEY[role][1])
             if role in ("main_canal", "connected_drain") and feature["properties"].get("culvert"):

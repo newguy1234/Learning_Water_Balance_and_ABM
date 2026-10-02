@@ -66,50 +66,50 @@ FarmerAgent = BaseFarmer
 
 
 # Section 7 / Tables 5-6 of Conceptual_Model.pdf, extended with the calendar, band,
-# checking, forecast, flow-through and price traits. Numerical values are scenario
-# assumptions, not fitted parameters or measurements from the paper.
+# checking, forecast and flow-through traits (abm.farmer.TRAITS says what each one does).
+# Numerical values are scenario assumptions, not fitted parameters or measurements.
 ARCHETYPES = {
-    # Wealthy, full-time, well staffed; keeps fields full and starts first.
+    # Full-time and well staffed; keeps fields full and starts first.
     'maximiser': dict(
-        traits=dict(wealth=.9, experience=.6, knowledge=.6, labour=.9, cooperation=.2, work_ethic=.9,
-                    risk_tolerance=.3, neighbour_offset=.6, eagerness=.6, drawdown=.2, overfill=.8,
-                    part_time=.1, foresight=.5, flow_through=.5, price_sensitivity=.2),
+        traits=dict(experience=.6, water_accounting=.6, cooperation=.2, work_ethic=.99,
+                    risk_tolerance=.3, neighbour_wetness_bias=.6, calendar_lead=.6, drawdown_tolerance=.2,
+                    refill_overshoot=.8, off_farm_work=.1, forecast_reliance=.5, flow_through_habit=.5),
         target_multiplier=1.3, learning_rate=.08, social_influence=.15, evidence_threshold=.05),
-    # Poor, short of hands, off-farm job on weekdays; lets the pond run low, watches cost.
+    # Short of hands, off-farm job on weekdays; lets the pond run low.
     'survivalist': dict(
-        traits=dict(wealth=.2, experience=.5, knowledge=.5, labour=.3, cooperation=.8, work_ethic=.7,
-                    risk_tolerance=.4, neighbour_offset=-.5, eagerness=-.3, drawdown=.7, overfill=.2,
-                    part_time=.7, foresight=.3, flow_through=.1, price_sensitivity=.9),
+        traits=dict(experience=.5, water_accounting=.5, cooperation=.8, work_ethic=.79,
+                    risk_tolerance=.4, neighbour_wetness_bias=-.5, calendar_lead=-.3, drawdown_tolerance=.7,
+                    refill_overshoot=.2, off_farm_work=.7, forecast_reliance=.3, flow_through_habit=.1),
         target_multiplier=.95, learning_rate=.12, social_influence=.45, evidence_threshold=.03),
     # Experienced, knowledgeable, cooperative; reads forecasts, modest band.
     'steward': dict(
-        traits=dict(wealth=.6, experience=.9, knowledge=.9, labour=.7, cooperation=.95, work_ethic=.9,
-                    risk_tolerance=.6, neighbour_offset=-.3, eagerness=.2, drawdown=.6, overfill=.3,
-                    part_time=.2, foresight=.8, flow_through=.1, price_sensitivity=.6),
-        target_multiplier=.95, learning_rate=.10, social_influence=.3, evidence_threshold=.03),
+        traits=dict(experience=.9, water_accounting=.9, cooperation=.95, work_ethic=.97,
+                    risk_tolerance=.6, neighbour_wetness_bias=-.3, calendar_lead=.2, drawdown_tolerance=.6,
+                    refill_overshoot=.3, off_farm_work=.2, forecast_reliance=.8, flow_through_habit=.1),
+        target_multiplier=.95, learning_rate=.1, social_influence=.3, evidence_threshold=.03),
     # Risk-averse veteran: never lets the pond drop far, overfills, early.
     'guardian': dict(
-        traits=dict(wealth=.6, experience=.95, knowledge=.7, labour=.6, cooperation=.5, work_ethic=.8,
-                    risk_tolerance=.1, neighbour_offset=.5, eagerness=.4, drawdown=.1, overfill=.7,
-                    part_time=.2, foresight=.4, flow_through=.3, price_sensitivity=.3),
+        traits=dict(experience=.95, water_accounting=.7, cooperation=.5, work_ethic=.92,
+                    risk_tolerance=.1, neighbour_wetness_bias=.5, calendar_lead=.4, drawdown_tolerance=.1,
+                    refill_overshoot=.7, off_farm_work=.2, forecast_reliance=.4, flow_through_habit=.3),
         target_multiplier=1.2, learning_rate=.02, social_influence=.1, evidence_threshold=.15),
     # Tries drying (deep drawdown) and trusts forecasts; copies what works.
     'adaptive_experimenter': dict(
-        traits=dict(wealth=.6, experience=.4, knowledge=.85, labour=.8, cooperation=.7, work_ethic=.85,
-                    risk_tolerance=.85, neighbour_offset=-.2, eagerness=0., drawdown=.8, overfill=.4,
-                    part_time=.3, foresight=.9, flow_through=.1, price_sensitivity=.6),
-        target_multiplier=1., learning_rate=.3, social_influence=.65, evidence_threshold=.01),
+        traits=dict(experience=.4, water_accounting=.85, cooperation=.7, work_ethic=.97,
+                    risk_tolerance=.85, neighbour_wetness_bias=-.2, calendar_lead=0, drawdown_tolerance=.8,
+                    refill_overshoot=.4, off_farm_work=.3, forecast_reliance=.9, flow_through_habit=.1),
+        target_multiplier=1, learning_rate=.3, social_influence=.65, evidence_threshold=.01),
     # Low effort, mostly away, late; leaves the inlet running rather than visiting.
     'passive_operator': dict(
-        traits=dict(wealth=.5, experience=.5, knowledge=.4, labour=.35, cooperation=.4, work_ethic=.2,
-                    risk_tolerance=.4, neighbour_offset=0., eagerness=-.7, drawdown=.5, overfill=.5,
-                    part_time=.8, foresight=.1, flow_through=.6, price_sensitivity=.3),
+        traits=dict(experience=.5, water_accounting=.4, cooperation=.4, work_ethic=.48,
+                    risk_tolerance=.4, neighbour_wetness_bias=0, calendar_lead=-.7, drawdown_tolerance=.5,
+                    refill_overshoot=.5, off_farm_work=.8, forecast_reliance=.1, flow_through_habit=.6),
         target_multiplier=1.1, learning_rate=.01, social_influence=.1, evidence_threshold=.1),
     # Takes whatever the canal offers; runs water through when it can.
     'opportunist': dict(
-        traits=dict(wealth=.5, experience=.6, knowledge=.6, labour=.7, cooperation=.1, work_ethic=.7,
-                    risk_tolerance=.75, neighbour_offset=.3, eagerness=.1, drawdown=.4, overfill=.6,
-                    part_time=.4, foresight=.6, flow_through=.7, price_sensitivity=.4),
+        traits=dict(experience=.6, water_accounting=.6, cooperation=.1, work_ethic=.91,
+                    risk_tolerance=.75, neighbour_wetness_bias=.3, calendar_lead=.1, drawdown_tolerance=.4,
+                    refill_overshoot=.6, off_farm_work=.4, forecast_reliance=.6, flow_through_habit=.7),
         target_multiplier=1.15, learning_rate=.2, social_influence=.5, evidence_threshold=.02),
 }
 DEFAULT_ROSTER = tuple(ARCHETYPES)
@@ -125,7 +125,7 @@ class PersonalityFarmer(BaseFarmer):
     """BaseFarmer plus lagged, outcome-based social learning (the archetypes).
 
     On a check day it compares its last score with the adjacent owners' and, if one did
-    clearly better, moves its target multiplier, cooperation and drawdown part of the
+    clearly better, moves its target multiplier, cooperation and drawdown tolerance part of the
     way toward that farmer's. Stress pushes its target up, canal scarcity pulls it down
     and makes it more cooperative.
     """
@@ -145,7 +145,7 @@ class PersonalityFarmer(BaseFarmer):
 
     def social_state(self):
         return dict(target_multiplier=self.target_multiplier, cooperation=self.cooperation,
-                    drawdown=self.traits['drawdown'], score=self.score)
+                    drawdown_tolerance=self.traits['drawdown_tolerance'], score=self.score)
 
     def plan(self, obs):
         self.copied_from = None
@@ -161,8 +161,8 @@ class PersonalityFarmer(BaseFarmer):
             if copy > 0:
                 self.target_multiplier += copy * (best['target_multiplier'] - self.target_multiplier)
                 self.cooperation += copy * (best['cooperation'] - self.cooperation)
-                if 'drawdown' in best:
-                    self.traits['drawdown'] += copy * (best['drawdown'] - self.traits['drawdown'])
+                if 'drawdown_tolerance' in best:
+                    self.traits['drawdown_tolerance'] += copy * (best['drawdown_tolerance'] - self.traits['drawdown_tolerance'])
                 self.copied_from = int(best['farmer_id'])
                 self.copy_events += 1
         if self.memory:
@@ -172,7 +172,7 @@ class PersonalityFarmer(BaseFarmer):
             self.target_multiplier += rate * ((1-last['ks']) * (1-.5*self.traits['experience']) - .2*last['scarcity'])
             self.cooperation += rate * .1 * last['scarcity'] * (1-self.cooperation)
         self.target_multiplier = float(np.clip(self.target_multiplier, .65, 1.5))
-        self.traits['drawdown'] = float(np.clip(self.traits['drawdown'], 0, 1))
+        self.traits['drawdown_tolerance'] = float(np.clip(self.traits['drawdown_tolerance'], 0, 1))
 
     def adjust(self, obs, plan):
         rate = float(np.clip(self.params['learning_rate'], 0, 1))

@@ -24,7 +24,7 @@ def test_copy_successful_neighbour_changes_actions():
     control=make_agent('adaptive_experimenter', seed=9, learning_rate=1., social_influence=0.)
     farmer.score=control.score=.1
     obs['social_neighbours']=[dict(farmer_id=3, score=.9, target_multiplier=.8,
-        cooperation=.9, drawdown=0.)]
+        cooperation=.9, drawdown_tolerance=0.)]
     obs.update(owned_irrigation_sent_mm=np.array([200.,200.]), irrigation_sent_mm=np.array([200.,200.]))
     ir, dr=farmer.decide(obs)
     baseline,_=control.decide(obs)
@@ -32,13 +32,13 @@ def test_copy_successful_neighbour_changes_actions():
     assert farmer.copy_events == 1
     assert np.any(ir != baseline)
     assert farmer.target_multiplier < control.target_multiplier
-    assert farmer.traits['drawdown'] < control.traits['drawdown']
+    assert farmer.traits['drawdown_tolerance'] < control.traits['drawdown_tolerance']
 
 
 def test_guardian_needs_stronger_evidence():
     obs=observation()
     obs['social_neighbours']=[dict(farmer_id=3, score=.55, target_multiplier=.8,
-        cooperation=.9, drawdown=0.)]
+        cooperation=.9, drawdown_tolerance=0.)]
     guardian=make_agent('guardian'); guardian.score=.5
     guardian.decide(obs)
     assert guardian.copy_events == 0
@@ -83,12 +83,12 @@ def _target_with(offset, neighbour_mm, **params):
     obs = observation()
     obs['neighbour_mean_mm'] = np.array([neighbour_mm, neighbour_mm], dtype=float)
     farmer = make_agent('passive_operator', seed=1, learning_rate=0., **params)
-    farmer.traits['neighbour_offset'] = offset
+    farmer.traits['neighbour_wetness_bias'] = offset
     farmer.decide(obs)
     return farmer, farmer.last_target_mm
 
 
-def test_neighbour_offset_sets_direction_relative_to_neighbours():
+def test_neighbour_wetness_bias_sets_direction_relative_to_neighbours():
     _, wet = _target_with(1.0, 50.0)
     _, neutral = _target_with(0.0, 50.0)
     _, dry = _target_with(-1.0, 50.0)
@@ -117,8 +117,8 @@ def test_neighbour_level_is_remembered_not_snapshotted():
     np.testing.assert_allclose(list(farmer.neighbour_level.values()), 30 + memory * (80 - 30))
 
 
-def test_archetypes_differ_in_neighbour_offset():
-    offsets = {name: make_agent(name, seed=0).traits['neighbour_offset'] for name in DEFAULT_ROSTER}
+def test_archetypes_differ_in_neighbour_wetness_bias():
+    offsets = {name: make_agent(name, seed=0).traits['neighbour_wetness_bias'] for name in DEFAULT_ROSTER}
     assert offsets['maximiser'] > offsets['passive_operator'] > offsets['survivalist']
     assert all(-1 <= v <= 1 for v in offsets.values())
 
@@ -127,7 +127,7 @@ def test_any_registered_farmer_can_use_the_neighbour_target():
     import abm
 
     class Plain(abm.FarmerAgent):
-        defaults = dict(neighbour_offset=1.0)
+        defaults = dict(neighbour_wetness_bias=1.0)
 
         def decide_owned(self, obs):
             target = self.neighbour_target(obs, obs['target_depth_mm'])
@@ -149,7 +149,7 @@ def test_collaborative_levels_with_neighbours_uncollaborative_keeps_its_own():
 
     def target(cooperation, obs, offset):
         farmer = make_agent('passive_operator', seed=1, learning_rate=0.)
-        farmer.traits['neighbour_offset'] = offset
+        farmer.traits['neighbour_wetness_bias'] = offset
         farmer.set_cooperation(cooperation)
         farmer.decide(obs)
         return farmer.last_target_mm

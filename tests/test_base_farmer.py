@@ -9,10 +9,10 @@ from abm.farmer import BaseFarmer, NoDrainHold, in_drain_window
 pytestmark = pytest.mark.usefixtures("abm_builtins_only")
 
 # A plain farmer with every trait pinned (no personality noise) for exact checks.
-PINNED = dict(eagerness=0., drawdown=1., overfill=1., part_time=0., foresight=0., flow_through=0.,
-              price_sensitivity=1., wealth=0., risk_tolerance=1., knowledge=1., cooperation=0.,
-              neighbour_offset=0., labour=1., work_ethic=1., neighbour_weight=0., target_multiplier=1.,
-              schedule_jitter=0., week_swap=0.)
+PINNED = dict(calendar_lead=0., drawdown_tolerance=1., refill_overshoot=1., off_farm_work=0.,
+              forecast_reliance=0., flow_through_habit=0., risk_tolerance=1., water_accounting=1.,
+              cooperation=0., neighbour_wetness_bias=0., work_ethic=1., neighbour_weight=0.,
+              target_multiplier=1., schedule_jitter=0., week_swap=0.)
 
 
 def farmer(**params):
@@ -39,20 +39,20 @@ def test_register_refuses_farmers_that_do_not_inherit_base_farmer():
     assert abm.FarmerAgent is BaseFarmer
 
 
-def test_eagerness_shifts_the_crop_calendar_up_to_four_days():
-    assert farmer(eagerness=1.).calendar_shift_days == 4
-    assert farmer(eagerness=-1.).calendar_shift_days == -4
-    assert farmer(eagerness=.5).crop_day(10) == 12
+def test_calendar_lead_shifts_the_crop_calendar_up_to_four_days():
+    assert farmer(calendar_lead=1.).calendar_shift_days == 4
+    assert farmer(calendar_lead=-1.).calendar_shift_days == -4
+    assert farmer(calendar_lead=.5).crop_day(10) == 12
 
 
 def test_traits_vary_between_farmers_of_one_kind_unless_pinned():
     a, b = make_agent("steward", seed=1), make_agent("steward", seed=2)
-    assert a.traits["part_time"] != b.traits["part_time"]
-    assert make_agent("steward", seed=1, part_time=.3).traits["part_time"] == .3
+    assert a.traits["off_farm_work"] != b.traits["off_farm_work"]
+    assert make_agent("steward", seed=1, off_farm_work=.3).traits["off_farm_work"] == .3
 
 
 def test_bounds_follow_the_shifted_target():
-    early, late = farmer(eagerness=1.), farmer(eagerness=-1.)
+    early, late = farmer(calendar_lead=1.), farmer(calendar_lead=-1.)
     day = crop.MIDSUMMER_START - 2  # early farmer is already in its mid-season drain
     assert in_drain_window(early.crop_day(day)) and not in_drain_window(late.crop_day(day))
     t = early.stage_target_mm({}, early.crop_day(day))
@@ -100,13 +100,13 @@ def test_extra_constraints_can_be_added():
 
 def test_forecast_rain_holds_back_irrigation_for_farmers_who_trust_it():
     wet = observation(pond=20., rain_forecast_mm=np.array([0., 30., 30., 0., 0., 0.]))
-    blind = farmer(foresight=0.).act(dict(wet)).request[0]
-    seeing = farmer(foresight=1.).act(dict(wet)).request[0]
+    blind = farmer(forecast_reliance=0.).act(dict(wet)).request[0]
+    seeing = farmer(forecast_reliance=1.).act(dict(wet)).request[0]
     assert seeing < blind
 
 
-def test_part_time_farmer_checks_on_weekends_not_while_away():
-    f = farmer(part_time=1., labour=0., work_ethic=0.)
+def test_off_farm_worker_checks_on_weekends_not_while_away():
+    f = farmer(off_farm_work=1., work_ethic=0.)
     f.act(observation(day=20, weekday=5))            # Saturday: checks
     assert f.checked_today
     f.act(observation(day=21, weekday=0))            # Monday: away
@@ -127,18 +127,55 @@ def test_days_off_vary_slightly_between_farmers_and_weeks():
 
 def test_flow_through_on_hot_days():
     hot = observation(pond=20., et0_mm=6.)
-    assert farmer(flow_through=1.).act(dict(hot)).request[0] > farmer(flow_through=0.).act(dict(hot)).request[0]
+    assert farmer(flow_through_habit=1.).act(dict(hot)).request[0] > farmer(flow_through_habit=0.).act(dict(hot)).request[0]
 
 
-def test_price_trims_only_discretionary_water():
-    base = farmer(flow_through=1.)
-    free = base.act(observation(pond=20., et0_mm=6.)).request[0]
-    priced_farmer = farmer(flow_through=1.)
-    priced = priced_farmer.act(observation(pond=20., et0_mm=6., water_price_per_m3=1e6)).request[0]
-    essential = crop.target_depth_mm(20) - 20 + 5
-    assert priced < free
-    np.testing.assert_allclose(priced, essential, atol=1e-3)
-    assert priced_farmer.spend > 0
+def test_work_ethic_sets_the_check_interval():
+    assert [farmer(work_ethic=w).monitor_interval for w in (1., .75, .5, .25, 0.)] == [1, 2, 3, 4, 5]
+
+
+def test_earlier_trait_names_still_work_and_labour_folds_into_work_ethic():
+    from abm.farmer import RENAMED_TRAITS
+
+    for old, new in RENAMED_TRAITS.items():
+        lo, hi = abm.farmer.TRAIT_RANGE[new]
+        value = lo + .3 * (hi - lo)
+        assert BaseFarmer(**{old: value}).traits[new] == pytest.approx(value)
+    # The old interval 1 + 4(1 - labour)(1 - work_ethic) is kept exactly.
+    old = BaseFarmer(labour=.5, work_ethic=.5)
+    assert old.traits["work_ethic"] == pytest.approx(.75)
+    assert old.monitor_interval == 2
+    assert "wealth" not in BaseFarmer(wealth=.9, price_sensitivity=.9).traits
+
+
+def test_removed_traits_do_not_change_the_other_traits_drawn_for_a_seed():
+    # Retired traits keep their slot in the seeded draw: a farmer's other traits are the
+    # same as when wealth / labour / price_sensitivity existed (values from that version).
+    f = make_agent("steward", seed=1)
+    assert f.traits["experience"] == pytest.approx(min(.9 + _old_noise(1, 1), 1.), abs=1e-12)
+    assert f.traits["off_farm_work"] == pytest.approx(min(max(.2 + _old_noise(1, 11), 0.), 1.), abs=1e-12)
+
+
+def _old_noise(seed, slot, spread=.08):
+    rng = np.random.default_rng(seed)
+    draws = [rng.normal(0., spread * (2. if name in ("neighbour_offset", "eagerness") else 1.))
+             for name in ("wealth", "experience", "knowledge", "labour", "cooperation", "work_ethic",
+                          "risk_tolerance", "neighbour_offset", "eagerness", "drawdown", "overfill",
+                          "part_time", "foresight", "flow_through", "price_sensitivity")]
+    return draws[slot]
+
+
+def test_experience_damps_the_reaction_to_a_stressed_day():
+    """The learning step: target rises by rate × (1 − ks) × (1 − experience / 2)."""
+    rises = {}
+    for exp in (0., 1.):
+        f = make_agent("steward", seed=3, experience=exp, learning_rate=1., social_influence=0.)
+        f.memory.append(dict(day=0, ks=.5, irrigation_mm=0., scarcity=0., score=.5, copied_from=None))
+        before = f.target_multiplier
+        f.learn(observation())
+        rises[exp] = f.target_multiplier - before
+    assert rises[0.] == pytest.approx(.5)
+    assert rises[1.] == pytest.approx(.25)
 
 
 def test_weir_board_spills_above_the_crest():

@@ -205,9 +205,19 @@ def _metres(lon_a, lat_a, lon_b, lat_b):
 def exchange_perched(perched_mm, edges, physics, k_x=None, k_y=None, area_m2=None):
     """Net perched-water change (mm) from Darcy flow along `edges`. Conserves volume
     when `area_m2` is given; otherwise conserves millimetres (equal-area points)."""
+    return exchange_perched_parts(perched_mm, edges, physics, k_x, k_y, area_m2)[0]
+
+
+def exchange_perched_parts(perched_mm, edges, physics, k_x=None, k_y=None, area_m2=None):
+    """`exchange_perched` plus what each point sent its neighbours along each axis.
+
+    Returns (net, out_x, out_y) in mm over each point's own area. An edge's flow is
+    split between the axes by the share its east-west (Kx ux²) and north-south
+    (Ky uy²) terms contribute to the edge conductivity.
+    """
     n = perched_mm.size
     if edges is None or len(edges.i) == 0:
-        return np.zeros(n)
+        return np.zeros(n), np.zeros(n), np.zeros(n)
     kx = kx_of(physics) if k_x is None else k_x
     ky = ky_of(physics) if k_y is None else k_y
     kx = np.broadcast_to(np.asarray(kx, dtype=float), (n,))
@@ -224,10 +234,20 @@ def exchange_perched(perched_mm, edges, physics, k_x=None, k_y=None, area_m2=Non
     np.add.at(net, j, 1000.0 * q_m3 / np.maximum(area[j], 1e-9))
     # Do not pull a dry node negative; scale the whole step if needed.
     trial = perched_mm + net
+    scale = 1.0
     if np.any(trial < -1e-9):
         room = np.where(net < 0, perched_mm / np.maximum(-net, 1e-12), 1.0)
-        net = net * np.min(np.clip(room, 0.0, 1.0))
-    return net
+        scale = float(np.min(np.clip(room, 0.0, 1.0)))
+        net = net * scale
+    x_share = np.divide(0.5 * (kx[i] + kx[j]) * edges.ux ** 2, k_edge,
+                        out=np.full(k_edge.shape, 0.5), where=k_edge > 0)
+    source = np.where(q_m3 >= 0, i, j)
+    sent_mm = scale * 1000.0 * np.abs(q_m3) / np.maximum(area[source], 1e-9)
+    out_x = np.zeros(n)
+    out_y = np.zeros(n)
+    np.add.at(out_x, source, sent_mm * x_share)
+    np.add.at(out_y, source, sent_mm * (1.0 - x_share))
+    return net, out_x, out_y
 
 
 def neighbour_mean(values, edges):

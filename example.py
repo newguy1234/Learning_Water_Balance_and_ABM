@@ -51,9 +51,8 @@ class MyRatios(cyclic.RatioPolicy):
 # 3. ABM farmer: decides for every paddy it owns --------------------------------------------
 # Every farmer must inherit abm.BaseFarmer (register_farmer refuses anything else). It
 # already brings the shared personality variables (abm.TRAITS), the crop calendar shifted
-# by eagerness, lower/upper bounds with fill-and-let-drop, part-time checking, rain
-# forecasts, the outlet weir board, flow-through, the pricing check and the hard no-drain
-# holds. Change what you like: personality centre (traits_mean, jittered per farmer),
+# by calendar_lead, lower/upper bounds with fill-and-let-drop, off-farm-work checking, rain
+# forecasts, the outlet weir board, flow-through and the hard no-drain holds. Change what you like: personality centre (traits_mean, jittered per farmer),
 # exact params (defaults), any hook, and extra constraints.
 class NoDrainBeforeHarvestInspection(abm.Constraint):
     """Extra hard rule: keep the weir up for 3 days before the harvest drain so the
@@ -75,13 +74,14 @@ class MyFarmer(abm.BaseFarmer):
     leaves the inlet running while away. Fairly uncollaborative — a little wetter than the
     neighbours rather than levelling with them."""
 
-    traits_mean = dict(part_time=0.8, eagerness=-0.4, drawdown=0.7, overfill=0.6,
-                       flow_through=0.5, cooperation=0.2, neighbour_offset=0.3)
+    traits_mean = dict(off_farm_work=0.8, calendar_lead=-0.4, drawdown_tolerance=0.7,
+                       refill_overshoot=0.6, flow_through_habit=0.5, cooperation=0.2,
+                       neighbour_wetness_bias=0.3)
     defaults = dict(upper_gap_mm=25.0)
     constraints = abm.BaseFarmer.constraints + (NoDrainBeforeHarvestInspection(),)
 
     def expected_rain_mm(self, obs):
-        # Distrusts forecasts beyond tomorrow, whatever its foresight.
+        # Distrusts forecasts beyond tomorrow, whatever its forecast_reliance.
         forecast = np.asarray(obs.get("rain_forecast_mm", [0.0, 0.0]), dtype=float)
         return 0.5 * float(forecast[1]) if forecast.size > 1 else 0.0
 

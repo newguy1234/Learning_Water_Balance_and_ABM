@@ -106,7 +106,8 @@ class AnisotropyTests(unittest.TestCase):
         from cyclic.canal import apply_canal, distance_to_canal_m
         leftover = np.array([20.0, 0.0])
         lon = np.array([140.267, 140.267])
-        lat = np.array([35.82, 35.807])
+        # Point 0 is ~170 m from the nearest drain reaching the pool, point 1 ~40 m.
+        lat = np.array([35.807, 35.82])
         dist = distance_to_canal_m(lon, lat)
         self.assertGreater(float(dist[0]), float(dist[1]))
         edges = knn_edges(lon, lat, k=1)

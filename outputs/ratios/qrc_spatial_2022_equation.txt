@@ -1,0 +1,9 @@
+Generalist leftover QRC - reservoir statevector - 16 train clusters
+Applies at any parcel: stay = clip(stay_target + b.(u - u_bar), 0, 1); capture = 1-stay.
+Kz = stay * 0.2000 (TEW/TAW); ground = stay * 0.8000.
+Kx, Ky = capture split on the local canal axis (not in b).
+Season leftover-weighted stay pinned to 0.2127.
+stay(t,x,y) = clip(stay_target + b.(u - u_bar), 0, 1)  with stay_target=0.2127    (R^2=-0.000)
+  b = -8.802e-20 (leftover-mean) -1.351e-19 (leftover_lag-mean) -7.743e-20 (et-mean) -1.535e-19 (rain-mean) +1.589e-19 (irrigation-mean) +1.708e-19 (drainage-mean) +5.358e-21 (inflow-mean) +2.421e-19 (season_frac-mean) +1.976e-17 (lon-mean) +9.366e-19 (lat-mean) -2.42e-22 (dist_m-mean) +2.015e-18 (near-mean) +9.264e-19 (leftover*near-mean) +1.263e-19 (leftover*dist_km-mean)
+S_top(t+1) = +0.1975 1 +0.9834 S(t) +0.1783 stay(t,x,y)*L+(t) -0.0204 ET(t) -0.0155 rain(t)    (R^2=0.997)
+u = [1, leftover, leftover_lag, ET, rain, IR, D, inflow, season_frac, lon, lat, dist_m, near=exp(-dist/400), leftover*near, leftover*dist_km]

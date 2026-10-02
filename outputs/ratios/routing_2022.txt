@@ -1,0 +1,14 @@
+Leftover recapture delivery - 2022 - closed-form Table 4-5 vector
+collection ratio Kx+Ky pinned to LFV_pump/LfA = 0.7873; Table 5 LFV_pump = 3,647,000 m3
+Beven limit of acceptability (set before the sweep): delivered >= 0.50 of Table 5
+limit met at any leftover speed: True
+
+ leftover_speed_m_d  mean_capture  entered_over_leftover  infiltration_m3     lfv_sim_m3  lfv_target_m3  delivered  infil_over_target  shortfall_m3  lfv_objective   loss  accepts
+             2.0000        0.7873                 0.7873   4,733,104.5871 2,360,652.9221 3,647,000.0000     0.6473             1.2978   82,262.1878         0.1244 1.4316     True
+            10.0000        0.7873                 0.7873   4,733,104.5871 2,360,652.9221 3,647,000.0000     0.6473             1.2978   82,262.1878         0.1244 1.4316     True
+            25.0000        0.7873                 0.7873   4,733,104.5871 2,360,652.9221 3,647,000.0000     0.6473             1.2978   82,262.1878         0.1244 1.4316     True
+            50.0000        0.7873                 0.7873   4,733,104.5871 2,360,652.9221 3,647,000.0000     0.6473             1.2978   82,262.1878         0.1244 1.4316     True
+           100.0000        0.7873                 0.7873   4,733,104.5871 2,360,652.9221 3,647,000.0000     0.6473             1.2978   82,262.1878         0.1244 1.4316     True
+           200.0000        0.7873                 0.7873   4,733,104.5871 2,360,652.9221 3,647,000.0000     0.6473             1.2978   82,262.1878         0.1244 1.4316     True
+
+Delivered is simulated LFV_pump over Table 5. Recapture is same-day collection of infiltrated leftover, not hop-then-lining-catch, so leftover speed should not close or open the gap. Recapture is uniform on cyclic cells, so leftover-weighted capture matches the area-weighted pin. Remaining gap is leftover volume, daily pan clip, and recapture taken by unsaturated neighbours.

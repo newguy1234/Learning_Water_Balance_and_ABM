@@ -1,0 +1,22 @@
+check,computed,reported,ok
+Eq.1 dWB (Table 3),984.0,984.0,True
+Eq.6 LFV_pump (Table 5),3647.0,3647.0,True
+Eq.7 dWB (Table 5),985.0,984.0,True
+Eq.12 RUE_North,0.35434343434343435,0.35,True
+Eq.12 RUE_South,0.25397421454499935,0.25,True
+Eq.13 RUE_all,0.3023225639029454,0.3,True
+Eq.14 LUE,0.2366030881017257,0.24,True
+(W-O)/IR_all,0.4610743479953289,0.46,True
+SDR,0.5609726736487299,0.56,True
+Rain x cyclic area = Table 3 R,2147.99,2148.0,True
+Table 4 D x A = Table 5 D_North,2630.04,2631.0,True
+Table 4 Lf x A = Table 5 LfA_North,2216.004,2216.0,True
+Eq.3 Lf_North closes Table 4,852.0,851.0,True
+Prose irrigation North mm/d = Table 4,17.5,15.595419847328245,False
+Table 7 WUE' North needs ER <= 0.8 R,404.956204379562,328.0,False
+Table 4 D x A = Table 5 D_South,2028.95,2029.0,True
+Table 4 Lf x A = Table 5 LfA_South,2416.295,2416.0,True
+Eq.3 Lf_South closes Table 4,917.0,917.0,True
+Prose irrigation South mm/d = Table 4,14.2,14.259541984732824,True
+Table 7 WUE' South needs ER <= 0.8 R,276.4186046511627,328.0,True
+Cyclic IR + IR_ncb = Table 5 IR_all,15414.152,15414.0,True

@@ -209,11 +209,10 @@ def record_farmer_performance(model, step):
                     stress_mm=mean(step.stress_mm),
                     score=mean(step.ks)-.15*mean(step.irrigation_mm)/40.-.05*mean(step.drainage_mm)/30.,
                     cooperation=float(policy.cooperation_level) if hasattr(policy, 'cooperation_level') else np.nan,
-                    neighbour_offset=float(getattr(policy, 'traits', {}).get('neighbour_offset', np.nan)),
+                    neighbour_wetness_bias=float(getattr(policy, 'traits', {}).get('neighbour_wetness_bias', np.nan)),
                     calendar_shift_days=int(getattr(policy, 'calendar_shift_days', 0)),
-                    part_time=float(getattr(policy, 'traits', {}).get('part_time', np.nan)),
+                    off_farm_work=float(getattr(policy, 'traits', {}).get('off_farm_work', np.nan)),
                     checked=int(bool(getattr(policy, 'checked_today', True))),
-                    spend=float(getattr(policy, 'spend', 0.)),
                     copying_events=int(getattr(policy, 'copied_from', None) is not None)))
     return rows
 
@@ -236,9 +235,9 @@ def farmer_performance(model, *, statuses=None, blocks=None, farmer_types=None, 
     for col in weighted:
         records[col] = records[col] * records.area_ha
     agg = {col: 'sum' for col in weighted}
-    agg.update(area_ha='sum', paddies='sum', cooperation='first', neighbour_offset='first',
-               copying_events='max', calendar_shift_days='first', part_time='first',
-               checked='max', spend='last')
+    agg.update(area_ha='sum', paddies='sum', cooperation='first', neighbour_wetness_bias='first',
+               copying_events='max', calendar_shift_days='first', off_farm_work='first',
+               checked='max')
     records = records.groupby(daily_keys, as_index=False).agg(agg)
     for col in weighted:
         records[col] /= records.area_ha
@@ -249,9 +248,9 @@ def farmer_performance(model, *, statuses=None, blocks=None, farmer_types=None, 
         irrigation_mm=('irrigation_mm','sum'), drainage_mm=('drainage_mm','sum'),
         sent_mm=('sent_mm','sum'), requested_mm=('requested_mm','sum'), capture_mm=('capture_mm','sum'),
         eta_mm=('eta_mm','sum'), etc_mm=('etc_mm','sum'), stress_mm=('stress_mm','sum'),
-        cooperation=('cooperation','last'), neighbour_offset=('neighbour_offset','last'),
+        cooperation=('cooperation','last'), neighbour_wetness_bias=('neighbour_wetness_bias','last'),
         copying_events=('copying_events','sum'), calendar_shift_days=('calendar_shift_days','last'),
-        part_time=('part_time','last'), check_days=('checked','sum'), spend=('spend','last')).reset_index()
+        off_farm_work=('off_farm_work','last'), check_days=('checked','sum')).reset_index()
     result['relative_yield_pct'] = [100*float(season_relative_yield(np.array([eta]), etc)[0])
         for eta, etc in zip(result.eta_mm, result.etc_mm)]
     result['sent_used_pct'] = 100*result.irrigation_mm / result.sent_mm.where(result.sent_mm > 0)
@@ -276,8 +275,8 @@ def farmer_type_performance(model, **filters) -> pd.DataFrame:
         return farms
     numeric = ['days','area_ha','score','relative_yield_pct','mean_ks','irrigation_mm',
                'drainage_mm','capture_mm','sent_used_pct','copying_events','cooperation',
-               'neighbour_offset','requested_mm','request_met_pct','calendar_shift_days',
-               'part_time','check_days','spend']
+               'neighbour_wetness_bias','requested_mm','request_met_pct','calendar_shift_days',
+               'off_farm_work','check_days']
     group = farms.groupby('farmer_type')
     result = group[numeric].mean()
     result.insert(0, 'farmer_periods', group.size())

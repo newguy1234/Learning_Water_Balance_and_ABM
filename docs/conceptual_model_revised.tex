@@ -1,0 +1,917 @@
+\documentclass{article}
+% ============================================================================
+% REVISED DRAFT -- marked-up revision of "Cognitive Digital Twin of a Cyclic
+% Irrigation System". Every paragraph that should change is in a blue CHANGED
+% box, every new paragraph in a green NEW box, and text to delete in a red
+% REMOVE box with the reason. Unboxed text is the original, kept as it was.
+% To produce the clean paper: keep the box contents, drop the box frames, the
+% REMOVE boxes and the Revision Guide (Section 0).
+% ============================================================================
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage[left=0.7in,right=0.7in,top=0.5in,bottom=0.5in]{geometry}
+\usepackage[authoryear]{natbib}
+\usepackage[table]{xcolor}   % CHANGED: [table] is required by \rowcolors; xcolor and natbib were loaded twice
+\usepackage{float}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usetikzlibrary{arrows.meta, shapes.geometric, positioning}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{pifont}
+\usepackage{caption}
+\usepackage[most]{tcolorbox}
+
+% --- revision mark-up ---------------------------------------------------------
+\newtcolorbox{changed}[1][]{breakable, enhanced, colback=blue!3, colframe=blue!55!black,
+  fonttitle=\bfseries\small, title={CHANGED --- #1}, before skip=6pt, after skip=6pt}
+\newtcolorbox{added}[1][]{breakable, enhanced, colback=green!4, colframe=green!45!black,
+  fonttitle=\bfseries\small, title={NEW --- #1}, before skip=6pt, after skip=6pt}
+\newtcolorbox{removed}[1][]{breakable, enhanced, colback=red!4, colframe=red!60!black,
+  fonttitle=\bfseries\small, title={REMOVE --- #1}, before skip=6pt, after skip=6pt}
+\newcommand{\verify}[1]{{\color{orange!85!black}\textbf{[verify: #1]}}}
+\newcommand{\citeneeded}{{\color{red!70!black}\textsuperscript{[citation needed]}}}
+
+% --- contribution-table marks (CHANGED: moved out of the document body) -------
+\definecolor{ForestGreen}{RGB}{34,139,34}
+\newcommand{\cmark}{\textcolor{ForestGreen}{\ding{51}}}
+\newcommand{\xmark}{\textcolor{red}{\ding{55}}}
+\newcommand{\pmark}{\textcolor{orange}{\ding{115}}}
+
+\title{An Agent-Based Demand Generator for a Cyclic Irrigation System:\\
+Towards a Cognitive Digital Twin of Imbanuma}
+\author{Petru Craciun}
+\date{}
+
+\begin{document}
+\maketitle
+
+% =============================================================================
+\section*{0. Revision Guide (delete before submission)}
+% =============================================================================
+\begin{added}[how to read this draft]
+The paper described a design written before the model was built. The model now exists
+(\texttt{cyclic/} for the physical water-fate model, \texttt{abm/} for the farmers and the
+station), and several parts of the design were built differently, deferred, or dropped. This
+draft keeps the original voice and structure and marks every edit. The guiding change is one
+of scope: the implemented system is an \emph{agent-based demand generator} on a physical model
+checked against \cite{Okura2025WaterBalance}, feeding a water-application optimiser. It is a
+step towards a cognitive digital twin, not yet a synchronised one, and the claims are adjusted
+to match.
+
+\medskip
+\small
+\begin{tabular}{p{4.1cm}p{1.7cm}p{10.4cm}}
+\toprule
+\textbf{Section} & \textbf{Action} & \textbf{Why} \\ \midrule
+Title, Abstract & Changed & Claims live synchronisation, nutrient loads and pump cost, none of which are implemented. \\
+1 Metadata, Stakeholders, Context & Changed in part & Aim and keywords re-scoped; regulators become future-work stakeholders; the two-tier lateral flow is now concrete. \\
+2 Related Work & Small edits & Empty citation key; gap restated around the demand generator. \\
+3 Objectives, Hypotheses, Factors, Metrics & Changed & Mapped onto the parameters and outputs the code actually has; H8 added for trait sensitivity. \\
+4 Scope table & Changed & Fertiliser, homophily by wealth, copula and AETI rows no longer match the model. \\
+5 User stories & Small edits & Fertiliser story deferred; optimiser-developer story added. \\
+6 Key activities & Changed & Fertiliser activity deferred. \\
+7 Archetypes & Changed & Eight attributes replaced by the twelve implemented traits; learning rule formalised. \\
+8 Agents \& Templates & Changed & Farmer and station state machines replaced by the implemented decision cycles; grid replaced by real parcels. \\
+\textbf{9 Physical sub-model} & \textbf{New} & The cyclic water-fate model and the inferred underground flow ratios. \\
+\textbf{10 Verification \& sensitivity} & \textbf{New} & The trait and scenario sensitivity tests and their results. \\
+11 Contribution & Changed & The table over-claimed digital-twin framing; text follows the new scope. \\
+12 Data \& validation & Changed & AETI depth disaggregation removed (superseded by Section 9); real data sources listed. \\
+\textbf{13 Limitations \& future work} & \textbf{New} & What is deferred and what the tests found. \\
+Appendix A & New & Mechanical LaTeX fixes. \\ \bottomrule
+\end{tabular}
+\end{added}
+
+% =============================================================================
+\begin{changed}[Abstract: re-scoped to what is implemented]
+\begin{abstract}
+Agricultural water management in flat alluvial plains requires balancing engineered distribution channels with complex physical hydrology, a task increasingly challenged by decentralised human decision-making and climate volatility. This paper presents a coupled socio-hydrological agent-based model of the Imbanuma cyclic irrigation system in Chiba Prefecture, Japan, developed using the Mesa framework as the behavioural core of a future cognitive digital twin (CDT). Unlike conventional irrigation models that treat human behaviour as static operational bounds, our approach embeds heterogeneous, socially learning farmers and a Land Improvement District (LID) pumping-station agent directly within a physically based water-fate model of 4,002 mapped parcels. Adhering to the Engineering Agent-Based Social Simulation (EABSS) methodology, we structure the co-evolution of plot-scale farmer interventions (inlet requests, drainage, outlet weir settings and calendar choices) and LID dispatch policies (receding-horizon, reuse-first pump scheduling). Crucially, the physical sub-model infers how the water left over after evapotranspiration is partitioned underground at every parcel, between same-day recapture by the cyclic pumping pool and storage within the blocks, pinning the district mean to the lateral-flow budget measured by \cite{Okura2025WaterBalance} and freezing the shares across a wet and a dry year. Through paired, seed-controlled scenario experiments we evaluate how twelve behavioural traits, social learning, cooperation, weather extremes and pump capacity shape the irrigation demand the system generates, its peak and timing, drainage reuse and crop water stress. The model is positioned as a demand and scenario generator for a downstream water-application optimiser, and as the cognitive layer that a synchronised digital twin of the district will require.
+\end{abstract}
+\end{changed}
+
+\section{Study Metadata \& Case Study Definition}
+
+\subsection{Problem Definition Framework Matrix}
+\begin{changed}[Aim and keywords re-scoped; Study Approach adds the optimiser use]
+\centering
+\small
+\rowcolors{2}{gray!10}{white}
+\begin{tabular}{|p{3.5cm}|p{12.2cm}|}
+    \hline
+    \rowcolor[HTML]{F8F319}
+    \textbf{Component} & \textbf{System Specification} \\ \hline
+    \textbf{Title} & An Agent-Based Demand Generator for a Cyclic Irrigation System: Towards a Cognitive Digital Twin of Imbanuma \\ \hline
+    \textbf{Related Field(s)} & Socio-Hydrology, Computer Science, Environmental Governance \\ \hline
+    \textbf{Related Subfield(s)} & Engineering Agent-Based Social Simulation (ABSS), Cognitive Digital Twins (CDT), Computational Agriculture, Model Predictive Control of irrigation \\ \hline
+    \textbf{Study Approach} & Strategic \& Operational; Explanatory \& Exploratory; driven by empirical water-balance data \citep{Okura2025WaterBalance} and behavioural archetypes; outputs serve as demand scenarios for a water-application optimiser. \\ \hline
+    \textbf{Aim} & To develop, verify and analyse an agent-based model in which heterogeneous, socially learning farmers and an LID pumping-station agent act on a physically based water-fate model of the Imbanuma cyclic irrigation district, in order to (i) generate realistic, behaviourally grounded irrigation demand under weather and supply scenarios, and (ii) quantify how individual behavioural traits and management policies shape that demand and the cyclic reuse of drainage. \\ \hline
+    \textbf{Keywords} & Cyclic Irrigation; Socio-Hydrology; Agent-Based Model; Inferred Underground Flow Ratios; Land Improvement District (LID); Sensitivity Analysis; Mesa. \\ \hline
+\end{tabular}
+\captionof{table}{Problem Definition Framework Matrix.}
+\label{tab:eabss_step1_metadata}
+\end{changed}
+
+\subsection{Stakeholder Analysis and Governance Matrix}
+To ground the cognitive layer of the twin, the specific human and institutional actors having direct operational stakes or system-level oversight are formalized below:
+
+\begin{changed}[fertiliser removed from the farmer's role; LID role matches the implemented station; regulators deferred]
+\begin{enumerate}
+    \item \textbf{Individual Farmers (Primary Agents):}
+    \begin{itemize}
+        \item \emph{Interests:} Maintaining a crop-appropriate water depth with as little effort as their other work allows, protecting the crop from water stress, and keeping on terms with neighbouring farmers.
+        \item \emph{Role in Model:} Act as the main source of decentralised behavioural heterogeneity. Their daily operational choices (inlet requests, deliberate drainage, outlet weir-board height and, through their calendar, the timing of the mid-season and harvest drains) generate the irrigation demand the system must serve, and form the learning substrate of the cognitive layer.
+    \end{itemize}
+
+    \item \textbf{Land Improvement District (LID) Engineers \& Management Staff (Institutional Actor):}
+    \begin{itemize}
+        \item \emph{Interests:} Delivering enough water that no paddy is short tomorrow, reusing returning drainage before drawing on the lake, and keeping the pool and canals safe ahead of heavy rain.
+        \item \emph{Role in Model:} Implemented as a single pumping-station agent that decides each day how much the lake gate may admit, how much is pumped to the lake, and what is sent to each paddy, within the station's pump capacity and the pool's storage. Alternative policies are interchangeable agents, and the same role can be handed to an external optimiser.
+    \end{itemize}
+
+    \item \textbf{Regional Environmental Officers \& Water Basin Regulators (Secondary Stakeholders, future work):}
+    \begin{itemize}
+        \item \emph{Interests:} Controlling the nutrient loading (nitrogen and phosphorus) escaping into surrounding public water bodies.
+        \item \emph{Role in Model:} Not represented in the present version. Drainage volumes and their route to the pool or the lake are simulated, which is the hydrological half of a nutrient-load estimate; the biochemical half is deferred (Section~\ref{sec:limitations}).
+    \end{itemize}
+\end{enumerate}
+\end{changed}
+
+\subsection{Study Context Narrative}
+This study develops a cognitive digital twin of the Imbanuma irrigation area in Chiba Prefecture, Japan, grounded in the water balance analysis of \cite{Okura2025WaterBalance}. A digital twin is commonly described as a virtual representation of a physical system that is connected to its real-world counterpart through data exchange and synchronization mechanisms, enabling monitoring, analysis, prediction, and decision support \cite{Kritzinger2018DigitalTwin, Jones2020DigitalTwin}. A \emph{cognitive} digital twin extends this paradigm by embedding autonomous reasoning, learning, and decision-making capacity directly within the virtual representation, rather than relegating intelligence to an external analytics layer \cite{Tao2019DigitalTwin, Tao2021DigitalTwin, Rasheed2020DigitalTwin, Fuller2020DigitalTwin}. In an agricultural setting, this means the twin does not merely mirror tank levels and channel flows; it must also mirror the heterogeneous, adaptive decision processes of the human actors who operate the system \cite{Verdouw2021AgricultureDT}. The Imbanuma area, with its tightly coupled physical infrastructure and decentralised human decision-making, is therefore a natural candidate for a cognitive digital twin architecture rather than a conventional, purely physics-based simulation.
+
+\begin{added}[one paragraph stating where this paper sits on the road to a twin]
+The present paper builds the two halves such a twin requires (a physical water-fate model of the district and a cognitive layer of farmer and LID agents) and couples them, but stops short of continuous synchronisation with the field. In the terminology of \cite{Kritzinger2018DigitalTwin} it is a digital model, not yet a digital shadow or twin: its state is initialised from mapped parcels, satellite canopy observations, gauge-corrected weather and the published water balance, and its outputs are checked against \cite{Okura2025WaterBalance}, but no observation stream updates it during a run. Its immediate use is as a generator of behaviourally grounded irrigation demand, under controlled weather and supply scenarios, for a downstream water-application optimiser, which can also take over the LID role directly.
+\end{added}
+
+The Imbanuma area is a representative case of a complex, flat agricultural water system governed by a local Land Improvement District (LID)---the institutional authority responsible for Japanese irrigation asset management \cite{Kada2005LID, Shiozawa2011}. Its defining hydrological characteristic is cyclic irrigation: drainage water from upstream paddy fields is intentionally collected, pumped, and reused as an irrigation source downstream. This architecture substantially increases regional water reuse efficiency and suppresses the discharge of nutrient-laden agricultural drainage into surrounding public water bodies \cite{Takeda2001Cyclic, Maruyama2008}, while simultaneously introducing tight, non-linear couplings between localised irrigation operations and natural hydrological processes. Because every withdrawal, drainage, or pumping decision mechanically alters water available elsewhere in the loop, the case study constitutes exactly the kind of state-coupled, continuously evolving system for which a synchronised, cognitively-augmented digital representation offers value beyond a static simulation run \cite{Jones2020DigitalTwin, Fuller2020DigitalTwin}.
+
+\begin{changed}[the two-tier lateral pipeline is now implemented; say concretely what each tier is]
+Crucially, while \cite{Okura2025WaterBalance} quantify lateral subsurface flow only as a block-scale residual of the water balance, part of which reaches the centralised pumping pool because of the high regional groundwater table, this model resolves that residual at every parcel through a two-tier pipeline: (1) a \emph{macro-lateral} recapture, in which a parcel-specific share of the water that has passed the plow pan reaches the pumping pool the same day, larger for parcels close to a drain that leads to the pool and pinned in the district mean to the measured lateral-flow volume; and (2) a \emph{micro-lateral} exchange, in which the perched water table beneath each paddy flows to and from its four neighbouring parcels by Darcy's law before Hooghoudt drain flow carries it towards the farm drains (Section~\ref{sec:physical}). The empirical work of \cite{Okura2025WaterBalance} demonstrated that water balance dynamics in cyclic irrigation systems cannot be fully characterised through surface flows alone: lateral subsurface flow from paddy fields contributes substantially to drainage recovery channels and system-wide water availability. This behaviour is a defining feature of flat alluvial plain rice cultivation, where persistently high groundwater tables preclude simple vertical drainage assumptions \cite{Tabuchi1985Paddy, Shiratani2004Subsurface}, and underscores the need for integrated, multi-level models that concurrently represent engineered water transfers and the underlying physical hydrology, the physical-process half of the twin's dual physical--cognitive architecture \cite{Tao2019DigitalTwin}.
+\end{changed}
+
+As illustrated in Figure~\ref{fig:flows_top_down}, water circulates through a closed-loop irrigation network: from the storage pool and pumping station into the cyclic blocks, through individual paddy fields, into the drainage canal system, and back to the primary storage pool. This recirculating architecture creates a highly connected network in which an operational change at any single component propagates altered water availability, water levels, and hydraulic conditions across the entire system.
+
+Hydrological complexity is further compounded by external stochastic inputs and physical losses. Water enters through natural lake inflows and direct rainfall onto paddy surfaces, while losses arise through evapotranspiration, controlled drainage discharge, and deeper subsurface pathways. As shown in Figure~\ref{fig:flows_sideways}, vertical and horizontal fluxes operate simultaneously, producing feedbacks among surface water storage, soil moisture profiles, lateral flow velocities, and irrigation management decisions. The Imbanuma area therefore constitutes an important test case for integrated socio-hydrological cognitive digital twin modelling of coupled physical processes within heavily managed agricultural landscapes.
+
+\begin{changed}[real parcels, not a synthetic layout; stray fragment ``of its human dimension.'' removed]
+To reconcile the micro-agent layout with the macro-scale data available in the reference study, the simulated landscape is built from the 4,002 cadastral farmland parcels (Fude polygons) of the district, each classified as belonging to the North or South block and as cyclic or non-cyclic following Okura et al.'s Fig.~1a; 2,002 parcels are cyclic. Farmer agents own scattered sets of these parcels, and every parcel aggregates upward into the ``North block'' (260.4\,ha) and ``South block'' (263.5\,ha) monitored by \cite{Okura2025WaterBalance}, ensuring that emergent bottom-up simulation states can be directly verified against aggregate historical outflows. The landscape involves multiple actors operating across a strict hierarchy: individual farmers, who regulate plot-level inlets, outlets and weir boards based on local crop states and personal schedules; and irrigation management staff (LID workers), who estimate aggregate regional demand and coordinate pump infrastructure to deliver water across the system. Within the cognitive digital twin framing, these human actors are not external inputs to the physical model but cognitive sub-agents whose internal reasoning, learning, and adaptation must themselves be represented if the twin is to reproduce, predict, and ultimately support real-world management decisions \cite{Tao2021DigitalTwin, Verdouw2021AgricultureDT}.
+\end{changed}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[trim=0 0 0 123bp, clip=true, width=0.45\linewidth]{Flows_Top_Down.png}
+    \caption{Water circulation through the closed-loop irrigation network.}
+    \label{fig:flows_top_down}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.45\linewidth]{Flows_Sideways.png}
+    \caption{Vertical and horizontal flux interactions between individual system components.}
+    \label{fig:flows_sideways}
+\end{figure}
+
+% =============================================================================
+\section{Related Work}
+
+\subsection{Digital Twins and Cognitive Digital Twins}
+The digital twin concept originated in manufacturing and industrial asset management, where it denotes a virtual model continuously updated from sensor data to reflect the real-time state, behaviour, and degradation of a physical counterpart \cite{Kritzinger2018DigitalTwin}. Reviews of the field distinguish digital models, digital shadows, and digital twins primarily by the directionality and automation of data flow between the physical and virtual entities \cite{Jones2020DigitalTwin, Kritzinger2018DigitalTwin}. As the concept matured, researchers identified a further evolutionary step: twins that not only synchronise state but also reason over that state to generate predictions, explanations, and autonomous decisions, commonly termed cognitive digital twins \cite{Tao2019DigitalTwin, Tao2021DigitalTwin}. Surveys of enabling technologies position machine learning, agent-based reasoning, and optimisation as the core cognitive components layered atop the physical simulation core, alongside persistent challenges in uncertainty quantification, validation, and real-time data assimilation \cite{Rasheed2020DigitalTwin, Fuller2020DigitalTwin}. In agriculture specifically, digital twins have been proposed as the integrating layer connecting sensor networks, crop and process models, and farm management decisions, although applications to date emphasise the physical and biological model core, with comparatively limited treatment of the human decision-making layer as an explicit, learning cognitive component \cite{Verdouw2021AgricultureDT}.
+
+\subsection{Agent-Based Models of Irrigation Systems}
+\begin{changed}[only the first sentence: empty citation key ``\textbackslash cite\{, ElFartassi2025'' removed]
+The reviewed literature reveals a consistent fragmentation across the state of the art. Existing ABMs address biophysical coupling \cite{ElFartassi2025, Ghoreishi2021, Hyun2019, Sola2024, Streefkerk2023}, collective action in irrigation governance \cite{Cao2017, OkuraBudiasaKato2022}, or data-driven individual scheduling \cite{Agyeman2024, Chen2021RL} in relative isolation, and rarely integrate all three within a system characterised by closed-loop drainage reuse.
+\end{changed}
+Behavioural models highlight the importance of intra-seasonal, operational decision-making \cite{Alam2022, Wens2021}, yet existing applications remain constrained by specific environmental or institutional assumptions. Many models are tailored to gravity-fed, unidirectional river networks \cite{AIRABM2023, Sola2024, Vanelli2024, Wang2024Hotan} or treat infrastructure as a passive flow-control device rather than collectively managed shared capital \cite{VanderWal2022}. Where complex institutional interactions or supply-side management are explicitly represented \cite{Bahrami2022, Hyun2019}, models typically presuppose reservoir-centric systems operating under prior appropriation rules---not flat, drainage-dependent landscapes. Even where basin-scale agent-based socio-hydrological models explicitly represent multiple institutional stakeholder types and quantify bidirectional feedback, as in \cite{Wang2024Hotan}'s treatment of the agricultural-ecological tradeoff in the Hotan River basin, decision logic remains bound to established, largely rule-driven water-use strategies rather than an explicit, heterogeneous social-learning layer, and the system topology is a unidirectional, competitive basin allocation rather than a closed-loop, drainage-recirculating network. Hydro-economic and optimisation frameworks either abstract away spatial routing entirely \cite{Aghaie2020, Pouladi2019} or isolate individual field agents from multi-farmer externalities \cite{Agyeman2024, Chen2021RL}. Even models exploring rebound effects from efficiency-improving upgrades fail to account for the localised consequences of cyclic water reuse, where upstream extraction directly reduces the downstream volume available for recirculation \cite{Ghoreishi2021, Tamburino2020}. Critically, none of these agent-based efforts are framed, designed, or validated as digital twins: they are run as offline scenario-exploration tools rather than as continuously synchronisable, cognitively reasoning representations of a specific, monitored physical system \cite{Kritzinger2018DigitalTwin, Tao2019DigitalTwin}.
+
+\begin{added}[related work the new verification section relies on]
+A second, methodological thread concerns how such models are tested. Agent-based models of social-ecological systems are typically over-parameterised relative to the data available to calibrate them \cite{TroostBerger2015}, and the recommended response is to test structural realism against several observed patterns at once \cite{Grimm2005POM}, to begin sensitivity analysis with an extended one-factor-at-a-time design that exposes mechanisms \cite{tenBroeke2016}, and to choose the number of stochastic replicates by statistical power rather than convention \cite{Lee2015Output, SeriSecchi2017}. For water systems, scenario-based stress tests that perturb weather in controlled, interpretable ways are an established complement to probabilistic climate projections \cite{Brown2012DecisionScaling}. Few irrigation ABMs report whether each behavioural parameter they add measurably changes their outputs; this paper does so for every trait.
+\end{added}
+
+\subsection{Synthesis and Gap}
+\begin{changed}[gap restated: the model fills the behavioural and physical halves; synchronisation is future work; WUA $\rightarrow$ LID]
+A significant methodological gap therefore remains for complex lowland environments such as the Imbanuma irrigation area \cite{Okura2025WaterBalance}. In such systems, heterogeneous farmers are embedded within a multi-level LID governance structure, and their decentralised, daily drainage and intake decisions collectively determine the volume of water available for cyclic reuse. Addressing this gap requires a unified modelling framework that simultaneously captures individual agency, hierarchical management, and non-linear, bidirectional biophysical feedback, built so that it can mature into a cognitive digital twin: the physical sub-model must resolve the water balance at the scale at which farmers act and must be initialisable from observed or remotely sensed states, while the agent layer must reason over those states using adaptive, learning behavioural rules attributable to real farmers and irrigation managers \cite{Tao2019DigitalTwin, Tao2021DigitalTwin, Verdouw2021AgricultureDT}. This paper introduces such a coupled socio-hydrological model, implemented in the Mesa framework. It represents the shared infrastructure as an active institutional agent and couples a parcel-resolved, closed-loop water-fate model with heterogeneous, learning farmer decision rules, thereby capturing how individual drainage and intake behaviour alters local hydraulic states, which in turn drive the station's reuse-first pump scheduling. The farmer and LID decision logic is a first-class, learning component of the representation rather than an exogenous policy input, consistent with the cognitive digital twin paradigm \cite{Tao2021DigitalTwin, Rasheed2020DigitalTwin}; continuous synchronisation with field observations is the step that remains.
+\end{changed}
+
+To translate these multi-level domain dynamics into a robust, valid, and reproducible computational model, this study adapts the Engineering Agent-Based Social Simulation (EABSS) framework proposed by Siebers and Kl\"ugl \cite{SiebersKluegl}. The step-wise structure adopted in this paper follows the principles of the EABSS methodology while tailoring the individual design stages to the requirements of a socio-hydrological cognitive digital twin. This software engineering-driven approach structures model development from problem definition and scope specification through behavioural archetype construction, agent templates, and implementation design, providing a systematic bridge between domain knowledge and computational implementation.
+\begin{changed}[last sentence of this paragraph was a fragment (``Moving systematically \ldots\ structural object templates.'')]
+Moving systematically from formal problem definition and scope boundary-setting through the generation of explicit agent archetypes, UML use cases for multi-stakeholder interactions, and structural object templates, it provides a rigorous, verifiable pipeline for bridging macro-level LID governance rules and individual, plot-scale operational logic within the Mesa architecture, and for specifying, ahead of implementation, exactly which physical and cognitive elements the model must represent.
+\end{changed}
+
+% =============================================================================
+\section{Objectives \& Operationalisation}
+\label{sec:objectives}
+
+\begin{changed}[objectives 1 and 4 re-worded to match the implementation; objective 1 now includes the ratio inference]
+The aim of this study is to develop and analyse a coupled socio-hydrological model of the Imbanuma cyclic irrigation system \cite{Okura2025WaterBalance} that can serve as the cognitive core of a digital twin. To achieve this aim, the following objectives are defined:
+
+\begin{enumerate}
+    \item To develop a coupled socio-hydrological agent-based model that integrates a parcel-resolved physical water-fate model (including the inference of how the water left over after evapotranspiration is partitioned underground at every parcel), farmer decision-making, LID pump scheduling, and adaptive feedback mechanisms \cite{Tao2019DigitalTwin, Rasheed2020DigitalTwin}.
+    \item To investigate how heterogeneous farmer irrigation and drainage decisions influence water demand, water distribution, drainage reuse, and overall system performance within a closed-loop irrigation network \cite{Takeda2001Cyclic, Maruyama2008, Cao2017}.
+    \item To evaluate the effectiveness of alternative irrigation management and cooperative water allocation strategies in improving water-use efficiency and sustaining cyclic water reuse \cite{Cao2017, OkuraBudiasaKato2022, Bahrami2022}.
+    \item To assess the extent to which the cognitive (learning, adaptive) layer, as opposed to the physical hydrological core alone, shapes the irrigation demand and the efficiency of the system, and to expose that demand to an external optimiser seeking the least irrigation that keeps every paddy free of water stress \cite{Tao2021DigitalTwin, Verdouw2021AgricultureDT}.
+    \item To structurally decouple the model's reusable architecture --- agent templates, decision logic, stock-and-flow hydrological topology, and governance-role abstractions --- from Imbanuma-specific empirical calibration, such that the framework's genericity can be verified by design inspection independent of any single case study \cite{Tao2019DigitalTwin, Verdouw2021AgricultureDT}.
+    \item To illustrate the empirical transferability of the decoupled architecture by re-instantiating it against an independently parameterised cyclic irrigation configuration, and to evaluate, within explicitly bounded scope, whether operational and predictive performance is retained under re-parameterisation \cite{Jones2020DigitalTwin, Rasheed2020DigitalTwin}.
+\end{enumerate}
+\end{changed}
+
+\subsection{Hypothesis Operationalisation Mapping Matrix}
+\begin{removed}[duplicate heading and its one-line introduction]
+The original had this subsection heading twice, the first followed by ``To evaluate the 7 core socio-hydrological hypotheses under a rigorous software engineering framework, \ldots'' Keep only the second introduction below.
+\end{removed}
+
+\begin{changed}[eight hypotheses; factors and metrics renumbered to the implemented ones; H3, H5 and H7 restated]
+To evaluate the eight core socio-hydrological hypotheses, each hypothesis is linked to its corresponding experimental factor, response metrics, and operational verification criteria. This mapping provides a clear relationship between the research questions, simulation scenarios, and evaluation measures used throughout the study.
+
+\medskip
+\centering
+\small
+\rowcolors{2}{gray!10}{white}
+\begin{tabular}{|p{2.2cm}|p{4.3cm}|p{4.6cm}|p{6.2cm}|}
+    \hline
+    \rowcolor[HTML]{F8F319}
+    \textbf{Hypothesis} & \textbf{Independent Variable / Experimental Factor} & \textbf{Dependent Variable / Response Metric} & \textbf{Operational Verification Criteria} \\ \hline
+    \textbf{H1: Farmer Cooperation} & \textbf{F2:} Share of farmers made collaborative. & \textbf{M1, M3, M11:} Demand, unmet demand, Drainage Reuse Ratio. & Higher cooperation is expected to lower demand when the canal is short and to raise the share of drainage reused. \\ \hline
+    \textbf{H2: Adaptive Management} & \textbf{F5:} Station policy (fixed quota versus receding-horizon reuse-first). & \textbf{M7, M9, M12:} Lake withdrawal, ET shortfall, WUE$'$. & Adaptive dispatch should lower lake withdrawal while keeping ET shortfall at zero. \\ \hline
+    \textbf{H3: Farmer Learning} & \textbf{F3:} Learning rate and social influence. & \textbf{M1, M10, M12:} Demand, relative yield, WUE$'$. & Within-season learning is expected to move demand towards the level the best-scoring neighbours use, raising WUE$'$ without loss of yield. \\ \hline
+    \textbf{H4: Farmer Heterogeneity} & \textbf{F7:} Trait variability within archetypes. & \textbf{M1, M5:} Demand and its spatial spread, peak demand. & Greater heterogeneity is expected to widen the spread of demand across parcels and flatten the district peak. \\ \hline
+    \textbf{H5: Labour and Farm Structure} & \textbf{F1:} Parcels per farmer and farm-size variability. & \textbf{M1, M11:} Demand, Drainage Reuse Ratio. & Fewer, larger farms (fewer active farmers) are expected to reduce how often fields are checked and change the timing of demand. \\ \hline
+    \textbf{H6: Climate and Supply Stress} & \textbf{F4, F6:} Weather scenario; pump capacity. & \textbf{M1, M3, M9, M10:} Demand, unmet demand, ET shortfall, yield. & Drier and hotter seasons raise demand; only a binding supply limit is expected to produce crop stress. \\ \hline
+    \textbf{H7: Fidelity to the Measured Balance} & \textbf{F8:} Cognitive mode (static versus learning). & \textbf{M13:} Divergence from \cite{Okura2025WaterBalance} Tables 3--6. & The model should reproduce the measured block water balance; the learning mode should not move it further from the measurements than the static mode. \\ \hline
+    \textbf{H8: Trait Sensitivity} & \textbf{F9:} Each of the twelve traits, pinned at its low and high end. & \textbf{M1--M12.} & Each trait with a mechanistic expectation should move its output in the expected direction by a statistically significant and material amount; a trait that moves nothing should be removed. \\ \hline
+\end{tabular}
+\captionof{table}{Operationalisation and Evaluation Mapping Matrix.}
+\label{tab:eabss_step2_operationalisation}
+\end{changed}
+
+\subsection{Experimental Factors Breakdown}
+\begin{changed}[factors mapped to the implemented parameters; copula replaced by scenario stress tests; pump capacity and trait sweep added]
+The following experimental factors are varied across simulation scenarios to evaluate the performance and robustness of the coupled socio-hydrological system. Each is named after the parameter that implements it. A copula-based weather generator \cite{Claassen2025} remains the intended route to sampling extremes at their historical frequency; the present study uses interpretable, controlled weather perturbations in the spirit of a climate stress test \cite{Brown2012DecisionScaling}:
+
+\begin{enumerate}
+    \item \textbf{F1 Farm structure} (\texttt{paddies\_per\_farmer}, \texttt{farm\_size\_variability}) -- How many parcels each farmer holds and how unequal holdings are; fewer, larger holdings stand in for the shrinking, ageing farming population \cite{OkuraBudiasaKato2022}. Land abandonment itself is not represented.
+    \item \textbf{F2 Collaborative share} (\texttt{collaborative\_share}) -- The share of all farmers, of any archetype, made collaborative (cooperation 0.95) while the rest are uncollaborative (0.05) \cite{Cao2017, OkuraBudiasaKato2022}.
+    \item \textbf{F3 Learning} (\texttt{learning\_rate}, \texttt{social\_influence}, \texttt{evidence\_threshold}) -- How far and how readily farmers move their strategy towards a better-scoring neighbour and in response to stress and scarcity \cite{Alam2022, Wens2021}.
+    \item \textbf{F4 Weather scenario} -- Baseline (gauge-corrected 2021 or 2022), drought (rain $\times0.5$, ET$_0\times1.1$, a 25-day dry spell), wet (rain $\times1.5$), heatwave (14 days at ET$_0\times1.35$ without rain), storm (150\,mm and 80\,mm on consecutive days), dry July (July rain $\times0.2$) and erratic (log-normal day-to-day jitter) \cite{Okura2025WaterBalance, Brown2012DecisionScaling}.
+    \item \textbf{F5 Station policy} -- Receding-horizon reuse-first dispatch (default), fixed quota, adaptive, level-seeking and closed-gate policies, or an external optimiser \cite{Bahrami2022, Hyun2019, Agyeman2024}.
+    \item \textbf{F6 Pump capacity} (\texttt{pump\_capacity\_m3\_s}) -- The pumping station's capacity, 3.304\,m$^3$\,s$^{-1}$ (MAFF) or a fraction of it; at 25\,\% the canal can no longer meet demand.
+    \item \textbf{F7 Trait variability} (\texttt{trait\_variability}) -- The spread of each trait around its archetype mean (default 8\,\% of the trait's range) \cite{Alam2022, Wens2021}.
+    \item \textbf{F8 Cognitive mode} -- Static (\texttt{learning\_rate}\,$=0$) versus learning farmers, used to isolate the contribution of the cognitive layer relative to the physical core \cite{Tao2019DigitalTwin, Rasheed2020DigitalTwin}.
+    \item \textbf{F9 Trait sweep} -- Each of the twelve traits pinned for every farmer at its low, then its high end, everything else held identical (Section~\ref{sec:verification}).
+\end{enumerate}
+\end{changed}
+
+\subsection{Response Variables Inventory}
+\label{sec:response_variables}
+\begin{changed}[the outputs the model computes; fertiliser, pollution, pump cost and resilience deferred; equity defined]
+The following response variables are used to evaluate each experimental scenario. All are season totals or means over the district unless stated:
+\begin{enumerate}
+    \item \textbf{M1 Irrigation Demand} -- Water requested by all farmers from the canal (m$^3$); the quantity the model generates for the optimiser.
+    \item \textbf{M2 Irrigation Applied} -- Water farmers took from what the station sent (m$^3$) \cite{Okura2025WaterBalance}.
+    \item \textbf{M3 Unmet Demand} -- Demand the station did not send (m$^3$).
+    \item \textbf{M4 Drainage} -- Surface drainage $D$, farmer discharge plus weir spill, bund overflow and outlet leak (m$^3$) \cite{Okura2025WaterBalance}.
+    \item \textbf{M5 Peak 7-day Demand} and \textbf{M6 Day of the Peak} -- The largest rolling 7-day demand and when it occurs.
+    \item \textbf{M7 Lake Withdrawal} -- Water admitted through the lake gate, $W$ (m$^3$).
+    \item \textbf{M8 Mean Ponding Depth} (mm).
+    \item \textbf{M9 ET Shortfall} -- Weather-driven crop ET demand the pond and topsoil could not supply (mm).
+    \item \textbf{M10 Relative Yield} -- FAO-33 relative yield $1-K_y\sum\text{shortfall}/\sum\text{demand}$, $K_y=1.10$ \cite{Doorenbos1979}.
+    \item \textbf{M11 Reuse Ratios} -- $RUE$ and $LUE$, \cite{Okura2025WaterBalance} Eqs.~12--14 \cite{Takeda2001Cyclic, Maruyama2008}.
+    \item \textbf{M12 Water-Use Efficiency} -- $WUE'$, \cite{Okura2025WaterBalance} Eq.~11.
+    \item \textbf{M13 Fidelity to the Measured Balance} -- Relative error of the simulated block $IR$, $D$, $Lf$, $LFV_{pump}$ and $\Delta WB$ against \cite{Okura2025WaterBalance} Tables 3--6 \cite{Jones2020DigitalTwin}.
+    \item \textbf{M14 Allocation Equity} (proposed) -- Gini coefficient of the share of each farmer's demand that was met \cite{Cao2017}.
+\end{enumerate}
+Aggregate fertiliser application, nutrient pollution load, pump energy cost and a composite resilience index were listed in the original design; they are deferred to future work (Section~\ref{sec:limitations}).
+\end{changed}
+
+% =============================================================================
+\section{Scope \& System Boundaries}
+\begin{changed}[rows updated to the implementation; changed rows marked $\dagger$]
+\centering
+\small
+\begin{tabular}{|p{0.5cm}|p{1.6cm}|p{2.2cm}|p{1.6cm}|p{10.8cm}|}
+     \hline
+     \rowcolor[HTML]{F8F319}
+     \multicolumn{2}{|l|}{\textbf{Category}} & \textbf{Element} & \textbf{Decision} & \textbf{Justification} \\ \hline
+     \multicolumn{2}{|p{2.1cm}|}{\textbf{Actor}}
+     & Farmers$^\dagger$ & Include & Perform field-level actions (inlet requests, drainage, weir-board setting). Twelve traits create heterogeneous behaviour, forming the learning cognitive layer \cite{Alam2022, Wens2021, Tao2021DigitalTwin}. Fertiliser application deferred. \\ \cline{3-5}
+     \multicolumn{2}{|l|}{} & Irrigation Management Staff$^\dagger$ & Aggregate only & A single daily decision-maker at the pumping station, operating within pump capacity and flood-control rules \cite{Kada2005LID, Shiozawa2011, OkuraBudiasaKato2022}. \\ \cline{3-5}
+     \multicolumn{2}{|l|}{} & Commercial Agents$^\dagger$ & Exclude & No prices are simulated; LIDs charge area-based fees, not per volume. \\ \cline{3-5}
+     \multicolumn{2}{|l|}{} & Birds and Pests & Exclude & Omitted due to a lack of empirical baseline data within the primary case study framework; simplifies focus toward socio-hydrological interactions.\\ \hline
+     \multirow{16}{*}{\parbox{0.5cm}{\textbf{Phys.\\Env.}}} & Components & Lake$^\dagger$ & Boundary condition & Lake Kita-Imbanuma supplies the gate and receives outflow and spill; it is never exhausted, and its internal dynamics lie outside the system boundary. \\ \cline{3-5}
+     & & Pool$^\dagger$ & Include & The $18\times68$\,m, 4\,m deep pool at the pumping station: a flow-through buffer for returning drainage and recaptured lateral flow, spilling to the lake above capacity \cite{Okura2025WaterBalance}. \\ \cline{3-5}
+     & & Pumps$^\dagger$ & Include & Irrigation pump capacity 3.304\,m$^3$\,s$^{-1}$ (MAFF); when it binds, parcels nearest the pool are served first. \\ \cline{3-5}
+     & & Irrigation Main Channel & Include & Main water allocation point for block agents \cite{OkuraBudiasaKato2022, Okura2025WaterBalance}. \\ \cline{3-5}
+     & & Irrigation Branch Channel & Aggregate & Represented implicitly within each irrigation block because branch-level routing does not materially influence allocation decisions or system-scale performance metrics \cite{Okura2025WaterBalance}. \\ \cline{3-5}
+     & & Drainage Branch Channel$^\dagger$ & Include & Mapped from OpenStreetMap and GSI channel centrelines; each cyclic parcel's drainage travels along them to the pool with a travel time, and their proximity sets the recapture share \cite{Tabuchi1985Paddy, Shiratani2004Subsurface, Maruyama2008}. \\ \cline{3-5}
+     & & Main Drainage Channel$^\dagger$ & Include & Its daily water level (Okura Fig.~3) produces backwater that blocks the drains of low-lying parcels \cite{Okura2025WaterBalance, Shiratani2004Subsurface}. \\ \cline{2-5}
+     & Weather & Evapo-transpiration$^\dagger$ & Include & FAO-56 dual crop coefficient driven by Open-Meteo ET$_0$ \cite{Allen1998FAO56}. \\ \cline{3-5}
+     & & Crop Coefficient$^\dagger$ & Include & Basal coefficient from canopy cover: Sentinel-2 NDVI at 10\,m in the physical model, a stage curve in scenario seasons \cite{CarlsonRipley1997}. \\ \cline{3-5}
+     & & Rainfall$^\dagger$ & Include & Open-Meteo rainfall scaled to the on-site gauge's monthly totals \cite{Okura2025WaterBalance}. \\ \cline{3-5}
+     & & Remote-Sensing AETI Grid$^\dagger$ & Exclude (for now) & Not used to force the model: an independent actual-ET product is needed before satellite ET can serve as validation rather than input. \\ \cline{2-5}
+     & Triggers & Field Inlet and Outlet$^\dagger$ & Include & Each farmer requests water for, drains, and sets the weir board of every parcel it owns \cite{Alam2022}. \\ \cline{3-5}
+     & & Pool Dispatch to Fields & Include & Represents system-level water allocation decisions \cite{Bahrami2022, Hyun2019}. \\ \cline{3-5}
+     & & Pool Overflow to Lake & Exclude & Treated as an automatic physical process \cite{Okura2025WaterBalance}. \\ \cline{2-5}
+     & Processes & Underground leftover partition$^\dagger$ & Include & Plow-pan percolation, perched-layer exchange between neighbours, Hooghoudt drain flow and parcel-specific recapture (Section~\ref{sec:physical}). \\ \cline{3-5}
+     & & Nutrient Loading$^\dagger$ & Exclude (future) & Drainage volumes and routes are simulated; transport kinetics are deferred \cite{Takeda2001Cyclic}. \\ \hline
+     \multicolumn{2}{|p{2.1cm}|}{\textbf{Social Stereotypes}}
+     & Homophily$^\dagger$ & Exclude & Wealth, its proxy in the original design, is no longer a trait; interaction is spatial (adjacent owners). \\ \cline{3-5}
+     \multicolumn{2}{|l|}{} & Feedback & Include & Farmers adapt strategies based on observed outcomes \cite{Alam2022, Wens2021}. \\ \cline{3-5}
+     \multicolumn{2}{|l|}{} & Heterogeneity$^\dagger$ & Include & Twelve traits drawn per farmer around archetype means \cite{Alam2022, Wens2021}. \\ \hline
+     \multicolumn{2}{|p{2.1cm}|}{\textbf{Social \& Psych. Aspects}}
+     & Communication$^\dagger$ & Partial & Farmers read their adjacent owners' previous-day strategy and score; no explicit messages. \\ \cline{3-5}
+     \multicolumn{2}{|l|}{} & Trust$^\dagger$ & Partial & Represented by trust in the rain forecast and the evidence a farmer needs before copying a neighbour. \\ \cline{3-5}
+     \multicolumn{2}{|l|}{} & Cooperation & Include & Levelling with neighbours and holding back when the canal is short. \\ \cline{3-5}
+     \multicolumn{2}{|l|}{} & Social Learning & Include & Copying a better-scoring adjacent owner; the principal cognitive-learning mechanism \cite{Tao2021DigitalTwin}. \\ \cline{3-5}
+     \multicolumn{2}{|l|}{} & Peer Influence$^\dagger$ & Include & Through social learning and the neighbour-relative target. \\ \cline{3-5}
+     \multicolumn{2}{|l|}{} & Leadership & Exclude & Omitted to limit parameterization complexity; uniform structural network assumptions applied. \\ \cline{3-5}
+     \multicolumn{2}{|l|}{} & Conflict & Exclude & Water disputes are simplified through allocation rules rather than explicit conflict modelling. \\ \cline{3-5}
+     \multicolumn{2}{|l|}{} & Social Norms & Exclude & Cultural expectations are difficult to parameterise and represented indirectly. \\ \hline
+\end{tabular}
+\captionof{table}{Scope table: modelling decisions and justifications for each system element ($\dagger$ = changed from the original design).}
+\label{tab:scope}
+\end{changed}
+
+% =============================================================================
+\section{User Stories}
+\begin{changed}[fertiliser story deferred; weir and calendar stories and an optimiser story added]
+\centering
+\small
+\rowcolors{2}{gray!10}{white}
+\begin{tabular}{|p{2.8cm}|p{10.8cm}|p{2.6cm}|}
+\hline
+\rowcolor[HTML]{F8F319}
+\textbf{Stakeholder} & \textbf{User Story} & \textbf{Priority} \\ \hline
+Farmer & As a farmer, I want to monitor the water level within my paddy field so that I can decide when irrigation is required. & High \\ \hline
+Farmer & As a farmer, I want to control the opening and closing of field inlet and outlet gates so that I can maintain suitable water depth for rice cultivation. & High \\ \hline
+Farmer & \textbf{(new)} As a farmer, I want to set the outlet weir board so that water above the depth I want leaves on its own while I am away. & High \\ \hline
+Farmer & \textbf{(new)} As a farmer, I want to drain my fields mid-season and before harvest on my own calendar so that the crop is managed as I was taught. & Medium \\ \hline
+Farmer & As a farmer, I want to apply fertiliser according to crop requirements so that crop growth is maintained while minimising nutrient losses. & \textbf{Deferred} \\ \hline
+Farmer & As a farmer, I want to learn from previous irrigation outcomes and neighbouring farmers so that I can improve future management decisions. & High \\ \hline
+Farmer & As a farmer, I want to cooperate with neighbouring farmers during irrigation scheduling so that limited water resources are shared fairly. & High \\ \hline
+Land Improvement District (LID) & As an irrigation manager, I want to monitor regional water availability so that pumping decisions reflect current system conditions. & High \\ \hline
+Land Improvement District (LID) & As an irrigation manager, I want to operate pumps adaptively so that water reuse is maximised while reducing operational costs. & High \\ \hline
+Land Improvement District (LID) & As an irrigation manager, I want to coordinate water allocation across irrigation blocks so that downstream farmers receive adequate water supplies. & High \\ \hline
+Environmental Regulator & As an environmental regulator, I want to monitor drainage and nutrient discharge so that pollution risks to surrounding water bodies can be evaluated. & \textbf{Deferred} \\ \hline
+Optimisation Researcher & \textbf{(new)} As an optimisation researcher, I want the model to generate farmer demand under named weather and supply scenarios, and to let my algorithm take the station's place, so that I can evaluate water-application policies against realistic behaviour. & High \\ \hline
+Researcher & As a researcher, I want to compare adaptive and non-adaptive configurations so that the contribution of the cognitive layer can be quantified. & High \\ \hline
+Researcher & As a researcher, I want to evaluate multiple climate and management scenarios so that the resilience of the irrigation system can be assessed. & High \\ \hline
+Researcher & \textbf{(new)} As a researcher, I want to know whether each behavioural trait measurably changes the results so that every parameter in the model earns its place. & High \\ \hline
+\end{tabular}
+\captionof{table}{EABSS user stories describing the functional requirements of the model.}
+\label{tab:userstories}
+\end{changed}
+
+% =============================================================================
+\section{Key Activities}
+\begin{changed}[fertiliser activity deferred; the irrigation activity now describes the implemented loop]
+\begin{center}
+    \includegraphics[width=1\linewidth]{Irrigation.png}
+    \captionof{figure}{Irrigation activity. \emph{Redraw}: the farmer step is the decision cycle of Fig.~\ref{fig:Farmer_States}; the station step is the dispatch of Section~\ref{sec:station}.}
+    \label{fig:Irrigation Activity}
+\end{center}
+One major activity serves the two actors' common goal of promoting reuse: as seen in Figure~\ref{fig:Irrigation Activity}, each day the station sends water towards the fields, every farmer takes no more than it was sent, and the resulting drainage and recaptured lateral flow return to the pool to be reused the same or the next day. The fertiliser activity of the original design (Fertilizer.png), in which irrigation continues while the farmer applies fertiliser, is retained as a design for future work; its only implemented trace is the no-drainage hold farmers observe after herbicide and top-dressing applications (Section~\ref{sec:farmer-cycle}). A top-down explanation of the overall flow can be seen in Figure~\ref{fig:flows_top_down}. Each farmer agent has heterogeneous, learning behaviour, so that the cognitive layer produces different field-level responses even under otherwise identical physical conditions.
+\end{changed}
+
+% =============================================================================
+\section{Forming Behavioural Archetypes}
+\label{sec:archetypes}
+
+Agent-based studies commonly represent behavioural heterogeneity through mechanisms such as risk perception, adaptive decision-making, learning, and variation in resource management strategies among farmers \cite{Hyun2019,Wens2021,Streefkerk2023,ElFartassi2025}. Following the Engineering Agent-Based Social Simulation (EABSS) framework proposed by Siebers and Kl\"ugl \cite{SiebersKluegl}, behavioural stereotypes are defined as representative patterns of decision-making that describe typical responses within a population. In this study, these stereotypes are operationalised as behavioural archetypes that initialise the cognitive state of farmer agents within the digital twin. This initialisation is analogous to the parameterisation of a learning model before exposure to environmental feedback and system dynamics \cite{Tao2019DigitalTwin}.
+
+\begin{changed}[fertiliser removed from the list of decisions]
+The behavioural archetypes do not represent fixed social categories or deterministic farmer identities. Instead, they describe initial behavioural tendencies that influence agent decisions, including irrigation demand, drainage behaviour, water-depth preferences, field-checking routines, and cooperation within the cyclic irrigation network. Throughout simulation, farmers may modify their behaviour based on hydrological conditions, observed agricultural outcomes, interactions with neighbouring farmers, and the water the station is able to send.
+\end{changed}
+
+For the Imbanuma irrigation system, farmer agents are characterised by a combination of demographic attributes, behavioural parameters, and adaptation mechanisms. These characteristics define the initial behavioural state of each agent and determine how farmers respond to changes in water availability, crop conditions, and collective irrigation requirements.
+
+\subsection{Behavioural Traits and Farmer Characteristics}
+\begin{changed}[eight descriptive attributes replaced by the twelve implemented traits, each with its mechanism]
+Each farmer agent carries twelve behavioural traits. Each archetype fixes a mean for every trait, and every farmer draws its own value around that mean with a spread of 8\,\% of the trait's range, so that no two farmers of one archetype are identical. Unlike the descriptive attributes of the original design, every trait is defined by the decision rule it enters, so that its effect can be tested (Section~\ref{sec:verification}). Wealth and price sensitivity were removed because they acted only through a volumetric water price, which Japanese LIDs do not charge; labour availability was merged into work ethic because the model only ever used the two together; age is retained as a descriptive attribute that prescribes no behaviour.
+
+\medskip
+\small
+\begin{tabular}{|p{3.1cm}|p{1.2cm}|p{12cm}|}
+\hline
+\rowcolor[HTML]{F8F319}
+\textbf{Trait} & \textbf{Range} & \textbf{Behavioural Representation and Mechanism} \\ \hline
+\textbf{Experience} & 0--1 & Years of growing rice. After a day of crop stress, a learning farmer raises its target by $\lambda(1-K_s)(1-\tfrac{1}{2}e)$; an experienced farmer reacts half as much, treating one bad day as chance rather than a trend. \\ \hline
+\textbf{Water Accounting} & 0--1 & How carefully the farmer budgets water: the share of the paddy's seepage loss and of today's rain it counts when sizing a refill. \\ \hline
+\textbf{Cooperation} & 0--1 & Willingness to coordinate: pulls the farmer's target towards the neighbours' water level and trims its refill by up to 25\,\% when the canal cannot supply everyone. \\ \hline
+\textbf{Work Ethic} & 0--1 & How often the farmer walks its fields: every $1+4(1-w)$ days, from daily ($w=1$) to every five days ($w=0$). \\ \hline
+\textbf{Risk Tolerance} & 0--1 & Response to uncertainty: a risk-averse farmer keeps an 8\,mm safety margin above the crop's target depth, a risk-tolerant one none. \\ \hline
+\textbf{Neighbour Wetness Bias} & $-1$--$1$ & A preference for sitting wetter ($+$) or drier ($-$) than neighbouring paddies, by up to 15\,mm, acting only to the extent the farmer is uncooperative. \\ \hline
+\textbf{Calendar Lead} & $-1$--$1$ & Transplanting early or late relative to the district, by up to four days; the crop's water use, the mid-season drain and the harvest drain shift with it. \\ \hline
+\textbf{Drawdown Tolerance} & 0--1 & How far the pond may fall below target before a refill: up to 25\,mm. \\ \hline
+\textbf{Refill Overshoot} & 0--1 & How far above target a refill goes, and where the outlet weir board is set: up to 20\,mm. \\ \hline
+\textbf{Off-Farm Work} & 0--1 & The share of working days the farmer is away at another job; most Japanese rice farm households earn the greater part of their income off the farm \citep{OECD2019Japan}. Days off are always spent at home. \\ \hline
+\textbf{Forecast Reliance} & 0--1 & How many days of rain forecast the farmer leaves room for: up to four, trusting each later day 20\,\% less. \\ \hline
+\textbf{Flow-Through Habit} & 0--1 & \emph{Kakenagashi}: leaving the inlet running, up to 20\,mm\,d$^{-1}$ extra on hot days (ET$_0\ge5$\,mm) and 30\,\% above the expected loss while away. Continuous flowing irrigation is a recommended Japanese countermeasure against heat damage, lowering water and soil temperature \citep{Morita2016Heat}. \\ \hline
+\end{tabular}
+\captionof{table}{Behavioural traits of every farmer agent and the decision rule each one enters.}
+\label{tab:demographic_attributes}
+\end{changed}
+
+\subsection{Farmer Behavioural Archetypes}
+
+The combination of demographic attributes generates representative behavioural archetypes. Each archetype represents a distinct pattern of irrigation management, resource use, and cooperation behaviour. These archetypes define the initial decision-making strategies of farmer agents before adaptation occurs.
+
+\begin{changed}[criteria rewritten in terms of the implemented traits; Maximiser and Survivalist no longer defined by wealth]
+\centering
+\small
+\begin{tabular}{|p{3.5cm}|p{4.6cm}|p{8.2cm}|}
+\hline
+\rowcolor[HTML]{F8F319}
+\textbf{Category} & \textbf{Criteria} & \textbf{Example Archetypes} \\ \hline
+\textbf{Farm Effort and Off-Farm Work} & Work ethic; Off-farm work (management frequency and presence on the farm). &
+\textbf{The Maximiser} (full-time, daily checks, deep refills and an early calendar; maximises yield security at the cost of more water).\newline
+\textbf{The Survivalist} (away most working days, lets the pond run low, small refills). \\ \hline
+\textbf{Experience and Water Accounting} & Experience; Water accounting (understanding of seepage, rain and crop stages). &
+\textbf{The Steward} (high experience and accounting, reads forecasts, prioritises long-term sustainability).\newline
+\textbf{The Guardian} (high experience, slow to change, needs strong evidence before copying a neighbour). \\ \hline
+\textbf{Risk Tolerance and Adaptive Capacity} & Risk tolerance; Drawdown tolerance; Learning rate and social influence. &
+\textbf{The Adaptive Experimenter} (deep drawdown, trusts forecasts, learns and copies fastest).\newline
+\textbf{The Guardian} (low risk tolerance, keeps a safety margin and overfills).\newline
+\textbf{The Passive Operator} (rare checks, little learning, relies on the inlet left running). \\ \hline
+\textbf{Decision-Making Style and Social Dynamics} & Cooperation; Neighbour wetness bias; Flow-through habit. &
+\textbf{The Steward} (highly cooperative, levels with neighbours).\newline
+\textbf{The Opportunist} (uncooperative, wetter than neighbours, takes surplus canal water when offered).\newline
+\textbf{The Passive Operator} (low engagement, leaves water running rather than visiting). \\ \hline
+\end{tabular}
+\captionof{table}{Consolidated categorization of traits and resulting farmer behavioural archetypes.}
+\label{tab:farmer_archetypes_matrix}
+\end{changed}
+
+\begin{added}[the numerical archetype means, so the archetypes are reproducible]
+Table~\ref{tab:archetype_values} gives the trait means of each archetype. They are scenario assumptions derived from the qualitative descriptions above, not values fitted to survey data; Section~\ref{sec:verification} shows which of them matter for the demand the model generates.
+
+\medskip
+\centering
+\scriptsize
+\begin{tabular}{l*{12}{c}}
+\toprule
+ & \rotatebox{70}{experience} & \rotatebox{70}{water acc.} & \rotatebox{70}{cooperation} & \rotatebox{70}{work ethic} & \rotatebox{70}{risk tol.} & \rotatebox{70}{nbr.\ wetness} & \rotatebox{70}{calendar lead} & \rotatebox{70}{drawdown tol.} & \rotatebox{70}{refill overshoot} & \rotatebox{70}{off-farm work} & \rotatebox{70}{forecast rel.} & \rotatebox{70}{flow-through} \\ \midrule
+Maximiser & .60 & .60 & .20 & .99 & .30 & .60 & .60 & .20 & .80 & .10 & .50 & .50 \\
+Survivalist & .50 & .50 & .80 & .79 & .40 & $-.50$ & $-.30$ & .70 & .20 & .70 & .30 & .10 \\
+Steward & .90 & .90 & .95 & .97 & .60 & $-.30$ & .20 & .60 & .30 & .20 & .80 & .10 \\
+Guardian & .95 & .70 & .50 & .92 & .10 & .50 & .40 & .10 & .70 & .20 & .40 & .30 \\
+Adaptive Exp. & .40 & .85 & .70 & .97 & .85 & $-.20$ & .00 & .80 & .40 & .30 & .90 & .10 \\
+Passive Op. & .50 & .40 & .40 & .48 & .40 & .00 & $-.70$ & .50 & .50 & .80 & .10 & .60 \\
+Opportunist & .60 & .60 & .10 & .91 & .75 & .30 & .10 & .40 & .60 & .40 & .60 & .70 \\ \bottomrule
+\end{tabular}
+\captionof{table}{Trait means of the seven archetypes (\texttt{abm/agents.py}, \texttt{ARCHETYPES}).}
+\label{tab:archetype_values}
+\end{added}
+
+\subsection{Behavioural Adaptation}
+
+Although farmer agents begin with assigned behavioural archetypes, these classifications represent initial states rather than permanent identities. During simulation, behavioural parameters are continuously updated through interaction with the environment and social system.
+
+\begin{changed}[list matches the implemented learning inputs; LID recommendations removed]
+Farmers adapt their management strategies based on:
+
+\begin{itemize}
+    \item the crop water stress they observed on their own parcels,
+    \item water availability and irrigation reliability (the share of their request the station sent),
+    \item the score of their own previous strategy,
+    \item the strategies and scores of the owners of adjacent parcels.
+\end{itemize}
+\end{changed}
+
+\begin{added}[the learning rule, formally]
+On every day it checks its fields, a learning farmer $f$ with learning rate $\lambda_f$ compares its score with those of the owners of parcels adjacent to its own, read from a snapshot of the previous day that every farmer sees identically, so that the order in which agents act cannot cascade learning within a day. The score of a strategy is an observable proxy, not profit:
+\begin{equation}
+S_f = \overline{K_s} - 0.15\,\frac{\overline{IR}}{40} - 0.05\,\frac{\overline{D}}{30},
+\label{eq:score}
+\end{equation}
+area-weighted over the farmer's parcels. If the best neighbour $b$ scores more than the farmer's evidence threshold $\epsilon_f$ above it, the farmer moves its target multiplier $m$, cooperation $c$ and drawdown tolerance $d$ part of the way towards $b$'s:
+\begin{equation}
+x_f \leftarrow x_f + \lambda_f\,\sigma_f\,(x_b - x_f), \qquad x \in \{m, c, d\},
+\label{eq:copy}
+\end{equation}
+with social influence $\sigma_f$. Independently, the previous day's stress and scarcity move its target:
+\begin{equation}
+m_f \leftarrow m_f + \lambda_f\Big[(1-K_s)\big(1-\tfrac{1}{2}e_f\big) - 0.2\,s\Big], \qquad
+c_f \leftarrow c_f + 0.1\,\lambda_f\, s\,(1-c_f),
+\label{eq:stress_learning}
+\end{equation}
+where $e_f$ is experience and $s$ the share of its request the canal could not meet; $m_f$ is kept within $[0.65, 1.5]$. Setting $\lambda_f=0$ gives the static cognitive mode of factor F8.
+\end{added}
+
+For example, a Survivalist farmer may increase cooperation if coordinated water management improves access to irrigation resources, while a Maximiser farmer may reduce water demand after repeated exposure to water scarcity. Similarly, an Adaptive Experimenter may gradually adopt more efficient irrigation strategies after observing successful outcomes.
+
+This adaptive mechanism allows the digital twin to represent evolving farmer behaviour rather than static classifications. Consequently, the model captures the interaction between human decision-making, hydrological processes, and management interventions, which distinguishes a cognitive digital twin from a conventional non-adaptive simulation model \cite{Tao2021DigitalTwin,Rasheed2020DigitalTwin}.
+
+% =============================================================================
+\section{Agents and Templates}
+
+\subsection{Farmer Decision Cycle}
+\label{sec:farmer-cycle}
+\begin{changed}[the state table is replaced by the implemented daily cycle; redraw Farmer\_States.png to match]
+\begin{center}
+    \includegraphics[width=0.5\linewidth]{Farmer_States.png}
+    \captionof{figure}{Farmer states. \emph{Redraw}: \textsf{Routine} (not checking today; the inlet and weir stay as left), \textsf{Wait} (checked, no water needed), \textsf{Waiting\_For\_Water} (requested more than was sent), \textsf{Irrigating}; the \textsf{Fertilizing} state is removed.}
+    \label{fig:Farmer_States}
+\end{center}
+
+Each day, a farmer acts on every parcel it owns. Its crop calendar runs $\delta_f = \text{round}(4\,\ell_f)$ days ahead of the district's, where $\ell_f$ is its calendar lead, so its own crop day is $t' = t + \delta_f$.
+
+\textbf{1. Check or routine.} The farmer only looks at its fields on a check day: always on its days off, and on a working day if it is at home (it is away with probability equal to its off-farm work) and its check interval $1+4(1-w_f)$ has passed; it never goes seven days without a look. Days off are Saturday and Sunday for most farmers, shifted by a day for some, and occasionally moved in a given week. On other days nothing is decided: whatever inlet flow and weir setting were left keep running (state \textsf{Routine}).
+
+\textbf{2. Target.} The stage target depth $h^*(t')$ follows the crop calendar (80\,mm at establishment, 60\,mm during development, 50\,mm at mid-season, 10\,mm in the mid-season drain from day 70 for 14 days, 30\,mm late in the season and 0 from the harvest drain at day 120). The mid-season drain follows conventional Japanese practice \citep{Itoh2011Midseason}; the depths are scenario assumptions awaiting the LID crop calendar (Table~\ref{tab:data_acquired}). The farmer scales it by its learned multiplier and adds its risk buffer outside the drain windows, then drifts it towards its neighbours:
+\begin{equation}
+T = m_f\, h^*(t') + 8(1-r_f), \qquad
+T \leftarrow T + 0.3\cdot 20\tanh\!\left(\frac{c_f(\bar h_{nb} - T) + (1-c_f)\,b_f\cdot 15}{20}\right),
+\label{eq:target}
+\end{equation}
+where $r_f$ is risk tolerance, $c_f$ cooperation, $b_f$ neighbour wetness bias and $\bar h_{nb}$ a remembered mean ponding of the parcel's four neighbours (updated at 30\,\% a day).
+
+\textbf{3. Bounds.} The refill trigger and the refill level are $L = T - 25\,d_f$ and $U = \min(T + 20\,o_f,\; \text{bund} - 20)$, with drawdown tolerance $d_f$ and refill overshoot $o_f$; in the drain windows $L=0$ and $U=T$.
+
+\textbf{4. Fill and let drop.} With expected daily loss $E + a_f\,\text{seepage}$ ($a_f$ water accounting), $g$ days to its next check, the rain it counts today $a_f R$ and the forecast rain it trusts $\hat R = \sum_{k=1}^{\text{round}(4 q_f)} 0.8^k R_{t+k}$ ($q_f$ forecast reliance), the farmer refills only if the pond would otherwise fall below $L$ before its next look:
+\begin{equation}
+h + a_f R + \hat R - g\,(E + a_f\,\text{seepage}) < L \;\Rightarrow\; \text{request } \max(U - \hat R, L) - h - a_f R + E + a_f\,\text{seepage}.
+\label{eq:refill}
+\end{equation}
+If one fill cannot last until the next check, it leaves the inlet trickling. On hot days (ET$_0\ge 5$\,mm) it adds $20\,k_f$\,mm of flow-through, and while away a standing inlet $0.3\,k_f$ above the expected loss ($k_f$ flow-through habit). When the canal cannot meet everyone's requests, the refill is cut by $25\,\%\times c_f$.
+
+\textbf{5. Weir board.} The outlet weir crest is set at $U$; pond above it leaves through the outlet the same day.
+
+\textbf{6. Hard rules.} Whatever a farmer type decides, it takes no more than the station sent, drains no more than it holds, and observes the no-drainage holds: seven days at $\ge30$\,mm from crop day 5 after herbicide application, the water-holding period required in Japan since 2007 \citep{Phong2012Chikugo}, and, as a scenario assumption, four days after the mid-season top-dressing.
+
+\textbf{7. Social learning} (Eqs.~\ref{eq:score}--\ref{eq:stress_learning}).
+\end{changed}
+
+\begin{removed}[original farmer state-transition table]
+The table with Fertilizing transitions (per-farmer nitrogen and phosphorus thresholds) and the rule ``$0.5 <$ aggregate of block agents in Wait\_For\_Water'' is not implemented and is superseded by the cycle above.
+\end{removed}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.3\linewidth]{Flow_Of_Water.png}
+    \caption{Water Flow}
+    \label{fig:water_flow}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{Class_Diagram.png}
+    \caption{Class Diagram of Farmer Field interactions. \emph{Update}: \texttt{BaseFarmer} (traits, decision hooks, constraints) $\rightarrow$ \texttt{PersonalityFarmer} (social learning) $\rightarrow$ the seven archetypes; \texttt{StationAgent} $\rightarrow$ \texttt{MPCStation} and alternatives; \texttt{DistrictModel} holds one Mesa agent per farmer and one station agent on \texttt{WaterWorld}.}
+    \label{fig:class_diagram}
+\end{figure}
+
+\begin{changed}[parcels are owned and scattered, not generated sequentially in blocks]
+As can be seen above, farmers own scattered sets of parcels across the district rather than contiguous blocks, drawn reproducibly from a seed, and the archetypes are shuffled across farmers so that no personality is concentrated along the canal. This presents a problem common to all irrigation flows, as seen in \cite{OkuraBudiasaKato2022}: there is a need to model both cooperative and uncooperative farmer behaviour, and a resilient scheduling system should still perform well under all circumstances. Every decision hook of the farmer template can be overridden by a new farmer type registered outside the model, and the same template can be re-parameterised against newly observed field data, allowing the cognitive layer to be retrained as conditions in the real Imbanuma system change \cite{Tao2019DigitalTwin}.
+\end{changed}
+
+\subsection{Irrigation Management Agent}
+\label{sec:station}
+\begin{changed}[timetable state machine replaced by the receding-horizon station and its alternatives]
+\begin{center}
+    \includegraphics[width=0.5\linewidth]{Irrigation_Management_Agent.png}
+    \captionof{figure}{Irrigation management. \emph{Redraw}: states \textsf{Wait}, \textsf{Irrigation}, \textsf{Drain\_To\_Lake}, entered by the conditions of Eq.~\ref{eq:flood}, not a timetable.}
+    \label{fig:station}
+\end{center}
+
+The default LID agent is a receding-horizon (model predictive) dispatcher, the standard modern approach to canal and paddy irrigation scheduling: each day it predicts every paddy's pond with a simplified version of the physical model and a short weather forecast, chooses the least send that keeps every paddy free of stress tomorrow, applies only today's decision and re-plans tomorrow. With pond $h_0$, today's rain $R_0$ and ET demand $E_0$, the end-of-day pond after a send $s$ is
+\begin{equation}
+h_1 = \max(h_0 + R_0 + s - E_0,\, 0)\,\rho, \qquad \rho = (1-\text{leak})\left(1 - \frac{K_{pan}}{h_{ref}}\right),
+\end{equation}
+and tomorrow is stress-free if $h_1 \ge \max(E_1 - R_1, 0) + 3$\,mm, which gives the least send
+\begin{equation}
+s = \frac{\max(E_1 - R_1, 0) + 3}{\rho} + E_0 - h_0 - R_0,
+\end{equation}
+clipped to the canal limit (60\,mm\,d$^{-1}$) and the bund. Water already returning (the pool, same-day cyclic drainage and recaptured lateral flow) is used before any lake water; the lake gate opens only for the remaining shortfall, increased by a 5\,\% forecast safety and capped by the culvert (150{,}000\,m$^3$\,d$^{-1}$). Surplus returns are banked in cyclic paddies below target, whose seepage flows back to the pool. The pool is pumped to the lake only ahead of flood rain:
+\begin{equation}
+R_0 + R_1 > 40\,\text{mm} \quad \text{or} \quad \text{yesterday's spill} > 30{,}000\,\text{m}^3.
+\label{eq:flood}
+\end{equation}
+Fixed-quota, adaptive, level-seeking and closed-gate stations implement the alternatives of factor F5 on the same interface, and an external optimiser or reinforcement-learning policy can take the station's place day by day.
+\end{changed}
+
+\begin{removed}[original station state-transition table and its paragraph]
+The timetable-driven table (Wait $\leftrightarrow$ Irrigation on timeout; Drain\_Out\_To\_Lake on heavy rain or overflow) and the paragraph saying both strategies share it. The implemented strategies are separate agents with a common interface, as described above.
+\end{removed}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{Flow_Of_Stuff.png}
+    \caption{Farmer-Irrigation-Field interactions}
+    \label{fig:interactions}
+\end{figure}
+
+\subsection{Artificial Lab}
+\label{sec:artificial-lab}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth]{ArtificalLab.png}
+    \caption{Water Circulation throughout the field}
+    \label{fig:artificial_lab}
+\end{figure}
+
+\begin{changed}[one copy only (it appeared twice), and parcels instead of a regular grid]
+The figure above illustrates a simplified representation of the water flow connections within the system dynamics model, showing the relationship between a paddy block and the pool. Farmer decision-making processes are incorporated into the model by influencing the flow of water from the pool into individual paddies and subsequently into the drainage stock. The diagram represents a single paddy block; the full model contains the North and South blocks, each made of its mapped parcels. Agents (farmers) own parcels, and their interactions extend to the owners of the parcels adjacent to their own.
+\end{changed}
+
+\begin{changed}[PixelStructure.png: replace with a map of the parcels and their four cardinal neighbours]
+\begin{center}
+    \includegraphics[width=0.2\linewidth]{PixelStructure.png}
+    \captionof{figure}{Parcel neighbourhood. \emph{Replace} with a map of parcels in which each parcel is linked to its nearest neighbour to the east, west, north and south.}
+    \label{fig:Grid Like Structure}
+\end{center}
+\end{changed}
+
+This hybridisation of a stock-and-flow, system dynamics-style water balance with discrete, autonomous farmer agents follows a modelling tradition in which system dynamics is used to capture aggregate, continuous physical fluxes while an agent-based layer captures heterogeneous, discrete decision-making that would otherwise be smoothed away by a purely equation-based representation. Similar hybrid architectures have recently been used to couple soil-moisture and infiltration dynamics, modelled as system dynamics stocks and flows, with autonomous irrigation-control agents making discrete scheduling decisions \cite{AhmadiPargo2025HybridIrrigation}, and to couple spatially disaggregated agent-based sub-regions with a basin-scale system dynamics core to resolve water-energy-food trade-offs under multi-objective optimisation \cite{Zarei2025DisaggregatedSDAB}. The Imbanuma virtual lab follows the same logic at a finer spatial grain: the pool-to-block-to-paddy-to-drainage stock structure plays the role of the system dynamics core, while individual farmer agents, rather than exogenous scheduling rules, determine the timing and magnitude of the flows between stocks.
+
+\begin{changed}[from a Sugarscape grid to real parcels; remote sensing links through canopy cover]
+The spatial arrangement builds on the patch-based representation introduced by Epstein and Axtell's Sugarscape model, in which heterogeneous agents are situated on a discretised landscape of local resource patches and macro-level allocation patterns emerge from purely local, agent-level rules \cite{EpsteinAxtell1996Sugarscape}, but replaces the regular grid with the district's real cadastral parcels, so that every agent action applies to a field that exists. Each parcel's four cardinal neighbours (the nearest parcel to the east, west, north and south) define both the lateral exchange of the physical model and the neighbourhood of the social one. Remote sensing enters through the satellite cells that overlap each parcel: Sentinel-2 NDVI at 10\,m sets each cell's canopy cover, and therefore its transpiration, an approach related to grid-scale agricultural land and water allocation planning \cite{Tang2020GridScaleRS}. As new observations of the Imbanuma paddies become available they update the canopy of the physical model directly; synchronising water depths and flows as well is the step that would complete a twin.
+\end{changed}
+
+\subsubsection{Formal Artificial Lab Class}
+\begin{changed}[members of the implemented classes; AETI loader and cognitive\_mode flag replaced]
+\centering
+\small
+\begin{tabular}{|p{3.9cm}|p{12.6cm}|}
+\hline
+\rowcolor[HTML]{F8F319}
+\textbf{Member} & \textbf{Specification} \\ \hline
+\multicolumn{2}{|l|}{\cellcolor{gray!20}\textbf{Global variables (\texttt{SeasonConfig})}} \\ \hline
+\texttt{year}, \texttt{days} & Season 2021 or 2022, 131 days from 17 April. \\ \hline
+\texttt{seed}, \texttt{ownership\_seed} & Control farmer traits, archetype placement, schedules and parcel ownership, fixed per replicate for paired comparisons. \\ \hline
+\texttt{weather} & A weather scenario (F4); \texttt{pump\_capacity\_m3\_s} (F6); \texttt{collaborative\_share} (F2); \texttt{paddies\_per\_farmer}, \texttt{farm\_size\_variability} (F1). \\ \hline
+\multicolumn{2}{|l|}{\cellcolor{gray!20}\textbf{Compound variables}} \\ \hline
+\texttt{WaterWorld} & The 4,002 parcels with their four water stores, physics constants, recapture shares, drainage routes, backwater and the pool; advances the physics each day. \\ \hline
+\texttt{farmer\_agents} & One Mesa agent per farmer, wrapping its decision policy (a \texttt{BaseFarmer} subclass). \\ \hline
+\texttt{station\_agent} & The single LID agent (\texttt{MPCStation} by default). \\ \hline
+\multicolumn{2}{|l|}{\cellcolor{gray!20}\textbf{Global functions}} \\ \hline
+\texttt{step()} & Station observes and dispatches; every farmer observes its own parcels and decides; the physics advances; learning outcomes are recorded. \\ \hline
+\texttt{season\_efficiencies()} & $WUE'$, $RUE$, $LUE$ and relative yield (Okura Eqs.~11--14). \\ \hline
+\texttt{okura\_comparison()} & The simulated block balance against \cite{Okura2025WaterBalance} Tables 3--6 (M13). \\ \hline
+\texttt{sensitivity.run\_plan()} & The paired trait and scenario experiments of Section~\ref{sec:verification}. \\ \hline
+\end{tabular}
+\captionof{table}{Formal specification of the Artificial Lab (EABSS Step 8): \texttt{DistrictModel} on \texttt{WaterWorld}.}
+\label{tab:artificial_lab_class}
+\end{changed}
+
+\begin{changed}[abstractions as implemented: cardinal neighbours, adjacent owners, forecast, memory list]
+\centering
+\small
+\begin{tabular}{|p{3.2cm}|>{\raggedright\arraybackslash}p{2.3cm}|>{\raggedright\arraybackslash}p{10.6cm}|}
+\hline
+\rowcolor[HTML]{F8F319}
+\textbf{Implementation Detail} & \textbf{Decision} & \textbf{Justification} \\ \hline
+Physical Locomotion & Exclude & Introducing explicit continuous pathfinding adds heavy computational overhead without significantly altering systemic socio-hydrological dynamics. \\ \hline
+Visual Perception (Sight) & Partial Inclusion & Abstracted to the remembered ponding of each parcel's four cardinal neighbours. \\ \hline
+Communication / Social Auditory Sense & Partial Inclusion & Farmers read the previous day's strategy and score of the owners of adjacent parcels, one vote per farmer, from a snapshot shared by all. \\ \hline
+Environmental Perception (Tactile/Physical Sensing) & Full Inclusion & Pond depth, the water sent and the expected loss of each owned parcel are read directly on check days, and acted on through the bounds of Section~\ref{sec:farmer-cycle}. \\ \hline
+Macro Meteorological Sensing & Full Inclusion & Every farmer sees today's rain and a six-day rain forecast, trusted for as many days as its forecast reliance allows; the station sees the same forecast. \\ \hline
+Memory and Temporal Cognitive Sense & Partial Inclusion & Each learning farmer keeps a list of its daily outcomes (stress, irrigation, scarcity, score); learning uses the most recent. \\ \hline
+\end{tabular}
+\captionof{table}{Model abstractions, sensory modalities, and implementation scope.}
+\label{tab:model_scope_expanded}
+\end{changed}
+
+% =============================================================================
+\section{Physical Sub-Model: Cyclic Water Fate and Inferred Underground Flow Ratios}
+\label{sec:physical}
+\begin{added}[the conceptual model of the physical cyclic system and of the ratio inference]
+\subsection{Rationale}
+The water balance of \cite{Okura2025WaterBalance} is closed at block scale: irrigation, rainfall, drainage and evapotranspiration are measured or estimated, and lateral flow is what remains. That residual is the heart of cyclic irrigation, because part of it returns to the pumping pool and is reused, and part stays in the blocks. A model in which farmers act on individual parcels needs that residual resolved where they act. This section describes how the physical sub-model does so: it follows the water of every parcel through four stores each day, and infers, for every parcel, the share of the water left over after evapotranspiration that the pool recaptures. The ratios are constrained by the published water balance, not measured underground; what the section claims and does not claim is stated at its end.
+
+\subsection{Governing identities of the measured system}
+Following \cite{Okura2025WaterBalance}, with $W$ lake withdrawal, $O$ outflow to the lake, $IR$ irrigation, $D$ surface drainage, $R$ rainfall, $ET$ evapotranspiration, $Lf$ lateral flow and $A$ block area, the identities the model reproduces are:
+\begin{align}
+Lf_i &= IR_i + R - D_i - ET_i, && i \in \{N, S\} \quad \text{(block leftover, their Eq.~3)} \label{eq:okura_lf}\\
+\Delta\text{pool} &= W - O + LFV_{pump} + D_N + D_S - IR_{all} && \text{(pumping-station pool, Eq.~4)} \\
+LFV_{pump} &= IR_{all} - W + O - D_N - D_S && \text{(recaptured lateral flow, Eq.~6)} \\
+\Delta WB &= \frac{A_N Lf_N}{1000} + \frac{A_S Lf_S}{1000} - LFV_{pump} && \text{(block storage, Eq.~7)} \label{eq:okura_wb}\\
+RUE &= \frac{D}{IR_{all}}, \qquad LUE = \frac{LFV_{pump}}{IR_{all}} && \text{(reuse ratios, Eqs.~12--14)}
+\end{align}
+
+\subsection{Parcel-scale stores and fluxes}
+Each parcel carries four stores in millimetres over its own area: ponded water $h$, the depletion of the thin evaporating surface layer, the depletion of the root zone, and a perched water table above the farm-drain level. Each day, in order: rainfall and the irrigation the farmer applied land on the pond; evapotranspiration follows the FAO-56 dual crop coefficient \cite{Allen1998FAO56},
+\begin{equation}
+ET = (K_s K_{cb} + K_e)\,ET_0, \qquad K_{cb} = K_{cb,\text{bare}} + (K_{cb,\text{full}} - K_{cb,\text{bare}})\,f_c,
+\end{equation}
+with canopy cover $f_c$ from NDVI \cite{CarlsonRipley1997}, stress coefficient $K_s$ and evaporation coefficient $K_e$; the farmer's discharge, water above the weir board, overflow above the bund and an outlet leak leave as $D$; water then infiltrates through the plow pan in proportion to its depth,
+\begin{equation}
+I = K_{pan}\,\frac{h}{h_{ref}}, \qquad I \le h,
+\end{equation}
+refilling the surface layer, then the root zone, then the perched table. The perched table exchanges water with each of the parcel's four cardinal neighbours by Darcy's law (the micro-lateral tier),
+\begin{equation}
+Q_{ij} = K_{ij}\, D_{eq}\, (H_i - H_j), \qquad H = \frac{\text{perched}}{1000\,\mu}, \qquad
+K_{ij} = \tfrac{1}{2}\big[(K_{x,i}+K_{x,j})u_x^2 + (K_{y,i}+K_{y,j})u_y^2\big],
+\end{equation}
+with drainable porosity $\mu$, equivalent depth $D_{eq}$ and anisotropic conductivities $K_x$ (east--west) and $K_y$ (north--south) along the unit direction $(u_x, u_y)$ of each edge; and drains towards the farm drains by the Hooghoudt equation,
+\begin{equation}
+q = \frac{8 K D_{eq} H + 4 K H^2}{L^2},
+\end{equation}
+with drain spacing $L$, before a small deep percolation. The model checks the storage identity of every parcel every day:
+\begin{equation}
+\Delta(\text{pond} - \text{surface depletion} - \text{root-zone depletion} + \text{perched}) = R + IR - ET - D - \text{lateral} - \text{deep} + \text{neighbour exchange}.
+\end{equation}
+Crop water stress is the weather-driven ET demand that the pond and the topsoil cannot supply that day; its seasonal sum gives the relative yield of response variable M10 \cite{Doorenbos1979}.
+
+\subsection{Partitioning the leftover: the inferred underground flow ratios}
+After irrigation, rainfall, drainage and evapotranspiration, the leftover $L$ of every parcel (Eq.~\ref{eq:okura_lf} at parcel scale) is partitioned once into four shares that sum to one:
+\begin{equation}
+L = (K_x + K_y + K_z + K_g)\,L, \qquad K_x + K_y + K_z + K_g = 1 .
+\end{equation}
+$K_x + K_y$ is the \emph{recapture} share: water that has passed the plow pan and reaches the pumping pool the same day, contributing to $LFV_{pump}$; only water that has infiltrated can be recaptured, never water still standing on the pond. $K_z + K_g$ is the share that \emph{stays}, in the topsoil and below, and is the parcel's contribution to $\Delta WB$ (Eq.~\ref{eq:okura_wb}); it is split between the two by the ratio of the evaporable to the total available water. Because the pool only sees the sum $K_x + K_y$, the split between the two axes is reported but not identified.
+
+\textbf{Pinning the district mean.} The area-weighted mean recapture share over the cyclic parcels is fixed to the measured ratio of recaptured to total lateral flow:
+\begin{equation}
+\overline{K_x + K_y} = \frac{LFV_{pump}}{A_N Lf_N + A_S Lf_S} = 0.738 \;(2021), \quad 0.787 \;(2022).
+\end{equation}
+
+\textbf{Spatial structure.} Within that mean, parcels nearer a drain that reaches the pool recapture more. With $d_i$ the distance of parcel $i$ to the nearest such drain, a length scale $\Lambda$, and a block intensity $\beta_{b(i)}$ that scales the North and South blocks to their measured lateral-flow depths (Okura Table~4 and Fig.~6),
+\begin{equation}
+p_i = \beta_{b(i)}\, e^{-d_i/\Lambda}, \qquad
+\kappa_i = \bar\kappa\, \frac{p_i}{\langle p \rangle_A},
+\end{equation}
+where $\bar\kappa$ is the pinned mean and $\langle\cdot\rangle_A$ the area-weighted mean over cyclic parcels; where $\kappa_i$ would exceed one, the field is blended towards the mean so that every share stays a fraction. The drainage network is the set of mapped channels connected to the pool, not the main canal alone, so that a parcel deep inside a block but beside a farm drain recaptures as readily as one beside the canal. In the joint 2021--2022 fit used by the agent-based model, the 2,002 cyclic parcels have an area-weighted mean recapture share of 0.763, ranging from 0.27 to 1.0.
+
+\textbf{Holding the ratios across years.} The shares are fitted on one year and frozen on the other: fitted on the wet year 2021, they are evaluated against 2022, a drought year with 410\,mm of rain against a 638\,mm thirty-year mean, and vice versa. A law that holds across so different a pair of seasons is a property of the district, not of one season's weather.
+
+\textbf{Placing irrigation and drainage within a block.} \cite{Okura2025WaterBalance} measure irrigation and drainage per block, not per parcel. A small neural network, trained on one year and checked on the other, distributes each day's block totals over the parcels from their depth, the day's ET, rain and stress, canopy, block, cyclic status and distance to the canal, covering each parcel's ET first and placing the remainder, so that the block totals are matched exactly while their spatial pattern follows the parcels' state.
+
+\subsection{Routing, backwater and the pool}
+A cyclic parcel's drainage reaches the pool along a real route: to the nearest mapped channel connected to the main drainage canal, then along the channels to the pumping station, at an assumed $0.2$\,m\,s$^{-1}$\verify{drain velocity is an assumption}, so that drainage released late in the day on a long route arrives the next day. When the main drainage canal runs high (its daily depth from Okura Fig.~3), a low-lying parcel's farm drain cannot empty: a parcel drains freely while its ground (GSI 5\,m DEM) stands at least 0.10\,m above the drain reference plus the canal's rise over its normal depth, and below that the blocked share of its drainage rises linearly to all of it; the held water leaves later as seepage and lateral flow. The $18\times68$\,m, 4\,m deep pool is a flow-through buffer: same-day cyclic drainage and recaptured lateral flow are pumped straight back out, Lake Kita-Imbanuma makes up through the gate what the returns do not cover (Okura Eqs.~4 and 6), and anything above capacity spills to the lake.
+
+\subsection{What is and is not claimed}
+The contribution of this sub-model is the per-parcel map of inferred underground flow ratios, constrained by the published water balance and held across a wet and a dry year. It does not claim measured subsurface flow paths, a unique split between $K_x$ and $K_y$, or new knowledge of irrigation timing. The soil constants ($K_{pan}$, outlet leak, drain spacing, conductivities) are values within the ranges FAO-56 gives for rice and a clay-loam paddy soil, intended to be calibrated rather than quoted; at the last check the agent-based model reproduced the 2022 block balance within about $\pm12\,\%$, simulated about one third of the measured lateral flow, and, under the default station, applied about 0.45 times the measured irrigation \verify{re-run \texttt{okura\_comparison} for both years before quoting}.
+\end{added}
+
+% =============================================================================
+\section{Verification and Sensitivity Analysis}
+\label{sec:verification}
+\begin{added}[the trait and scenario tests and their results]
+\subsection{Design}
+Agent-based models of social-ecological systems are routinely over-parameterised relative to the data available to calibrate them \cite{TroostBerger2015}, so before the behavioural layer is used to generate demand, every parameter it adds must be shown to matter, and to matter in the direction its rule implies. We follow the extended one-factor-at-a-time design recommended as the first step for agent-based models \cite{tenBroeke2016}: for each of the twelve traits, every farmer's value is pinned at the bottom, then at the top of the trait's range, with everything else held as drawn. Because each farmer's traits are drawn in a fixed order from its seed, pinning one trait leaves every other trait, the ownership of every parcel and every farmer's schedule unchanged. The effect of a trait is the paired difference \emph{high $-$ low} for the same seed, so that the variation between seeds (common random numbers) cancels \cite{Lee2015Output}. Each comparison is repeated over three seeds, the number of seeds being checked against a power analysis \cite{SeriSecchi2017}, under baseline weather and again with the pumping station limited to 25\,\% of its capacity, the only setting in which the crop is short of water. The six weather scenarios of factor F4 are compared with baseline weather in the same paired way. In total, 168 full seasons on the 4,002-parcel district were simulated for 2022.
+
+Each trait with a mechanistic prediction carries an expected sign, read off its decision rule (Section~\ref{sec:farmer-cycle}): for example, refill overshoot raises the refill level and should raise demand. A verdict passes when the paired effect is significant across seeds ($p<0.05$, paired $t$-test), at least 1\,\% of the base value, and in the expected direction. Traits whose rule pulls both ways (water accounting, work ethic, off-farm work) carry no prior; the tests report what they do.
+
+\subsection{Results}
+Of 29 expectations, 26 were met. Table~\ref{tab:trait_effects} gives the effect of every trait on the season's irrigation demand.
+
+\medskip
+\centering
+\small
+\begin{tabular}{lrrl}
+\toprule
+\textbf{Trait (high $-$ low)} & \textbf{Normal supply} & \textbf{Pump shortage} & \textbf{Expectation} \\ \midrule
+Off-farm work & $-43.2\,\%$ & $-46.6\,\%$ & none \\
+Work ethic & $+30.2\,\%$ & $+32.6\,\%$ & none \\
+Cooperation & $-30.2\,\%$ & $-29.2\,\%$ & lower under shortage: met \\
+Refill overshoot & $+27.7\,\%$ & $+27.4\,\%$ & higher: met \\
+Forecast reliance & $-14.9\,\%$ & $-12.3\,\%$ & lower: met \\
+Flow-through habit & $+14.2\,\%$ & $+12.4\,\%$ & higher: met \\
+Risk tolerance & $-13.1\,\%$ & $-12.5\,\%$ & lower: met \\
+Drawdown tolerance & $-13.0\,\%$ & $-10.2\,\%$ & (on ponding) met \\
+Calendar lead & $-8.6\,\%$ & $-8.9\,\%$ & (on peak timing) \textbf{not met} \\
+Water accounting & $+6.6\,\%$ & $+4.0\,\%$ & none \\
+Experience & $0.0\,\%$ & $-4.1\,\%$ & lower under shortage: met \\
+Neighbour wetness bias & $+3.2\,\%$ & $+2.1\,\%$ & (on ponding) met \\ \bottomrule
+\end{tabular}
+\captionof{table}{Paired effect of each trait on season irrigation demand, 3 seeds, 2022. All effects except experience under normal supply are significant at $p<0.01$.}
+\label{tab:trait_effects}
+
+\raggedright
+Three findings shape the use of the model. First, how often farmers are at their fields (off-farm work and work ethic) drives demand more than any preference about water depth; farm-structure and labour scenarios therefore matter more for the generated demand than the depth targets of the archetypes. Second, at the station's full pump capacity no paddy is ever short of water, even in the drought scenario: relative yield is 1.00 in every weather scenario and falls to 0.88 only when pump capacity is cut, which is also the only setting in which experience, whose rule acts on crop stress, has any effect. Third, three expectations failed: calendar lead delays the demand peak instead of advancing it (consistently across seeds, in both supply settings), and risk tolerance under shortage lowers ponding by only 0.8\,\%, below the materiality threshold, because the pond is then limited by the water sent rather than by the farmer's margin. The first is an open question about the model; the second is a property of a supply-limited system rather than an error. The weather scenarios moved demand as expected: drought $+12.6\,\%$, dry July $+3.8\,\%$, heatwave $+2.0\,\%$, wet $-8.7\,\%$, with storm drainage $+82.7\,\%$.
+
+The same tests removed three traits from the original design: wealth and price sensitivity had no pathway in a system without volumetric water prices, and labour availability could not be distinguished from work ethic.
+\end{added}
+
+% =============================================================================
+\newpage
+\section{Contribution}
+\begin{changed}[this study's row is honest about what is implemented]
+\noindent \cmark\ = fully addressed \quad \pmark\ = partially addressed \quad \xmark\ = not addressed
+
+\medskip
+\centering
+\small
+\begin{tabular}{@{}p{5.2cm} p{1.9cm} p{1.9cm} p{1.9cm} p{1.9cm} p{1.9cm}@{}}
+\toprule
+\textbf{Study} & \textbf{Biophysical / Hydrology} & \textbf{Governance / Institutional} & \textbf{Cyclic Reuse Feedback} & \textbf{Cognitive / Learning Layer} & \textbf{Digital Twin Framing} \\ \midrule
+\multicolumn{6}{@{}l}{\textbf{Biophysical / Hydrology-Focused ABMs}} \\
+\citet{ElFartassi2025} & \cmark & \xmark & \xmark & \pmark & \xmark \\
+\citet{Ghoreishi2021} & \cmark & \xmark & \xmark & \pmark & \xmark \\
+\citet{Hyun2019} & \cmark & \pmark & \xmark & \pmark & \xmark \\
+\citet{Sola2024} & \cmark & \pmark & \xmark & \xmark & \xmark \\
+\citet{Streefkerk2023} & \cmark & \xmark & \xmark & \pmark & \xmark \\
+\citet{AIRABM2023} & \cmark & \xmark & \xmark & \xmark & \xmark \\
+\citet{Vanelli2024} & \cmark & \xmark & \xmark & \xmark & \xmark \\
+\multicolumn{6}{@{}l}{\textbf{Governance / Cooperation-Focused ABMs}} \\
+\citet{Cao2017} & \xmark & \cmark & \pmark & \pmark & \xmark \\
+\citet{OkuraBudiasaKato2022} & \pmark & \cmark & \pmark & \pmark & \xmark \\
+\citet{VanderWal2022} & \pmark & \pmark & \xmark & \xmark & \xmark \\
+\multicolumn{6}{@{}l}{\textbf{Basin-Scale / River-Conveyance ABMs}} \\
+\citet{Wang2024Hotan} & \cmark & \cmark & \xmark & \pmark & \xmark \\
+\multicolumn{6}{@{}l}{\textbf{Scheduling / Optimization Models}} \\
+\citet{Agyeman2024} & \pmark & \xmark & \xmark & \cmark & \xmark \\
+\citet{Chen2021RL} & \pmark & \xmark & \xmark & \cmark & \xmark \\
+\citet{Bahrami2022} & \pmark & \cmark & \xmark & \xmark & \xmark \\
+\citet{Aghaie2020} & \pmark & \xmark & \xmark & \xmark & \xmark \\
+\citet{Pouladi2019} & \pmark & \xmark & \xmark & \xmark & \xmark \\
+\citet{Tamburino2020} & \pmark & \xmark & \xmark & \xmark & \xmark \\
+\multicolumn{6}{@{}l}{\textbf{Empirical Case Study Basis}} \\
+\citet{Okura2025WaterBalance} & \cmark & \xmark & \cmark & \xmark & \xmark \\
+\multicolumn{6}{@{}l}{\textbf{This Study --- Imbanuma model}} \\
+\textbf{This Study} & \cmark & \pmark & \cmark & \cmark & \pmark \\ \bottomrule
+\end{tabular}
+\captionof{table}{Coverage of the reviewed studies. The duplicate ``\citet{Ghoreishi2021} (rebound)'' row was removed. This study: governance is partial (water allocation only, no fertiliser or pricing institutions); digital-twin framing is partial (initialised from observations, not synchronised).}
+
+\raggedright
+\medskip
+The model achieves its six objectives through concrete, traceable design choices rather than deferred claims. We satisfy the first objective by building a hybrid system-dynamics and agent-based architecture in which a parcel-resolved water balance --- pool, parcels and their four water stores, drainage routes --- captures continuous physical fluxes, while discrete farmer and station agents govern the timing and magnitude of transfers between these stocks; we resolve the block-scale lateral-flow residual of the reference case study into a per-parcel map of inferred underground flow ratios, pinned to the measured recapture and held across a wet and a dry year, and couple it with a micro-lateral Darcy exchange between adjacent parcels. We meet the second objective by defining seven behavioural archetypes over twelve traits, each defined by the decision rule it enters, so that differing archetype compositions produce measurably distinct patterns of irrigation demand, drainage, and cyclic reuse --- a property the sensitivity tests confirm trait by trait. We address the third objective by implementing interchangeable station agents on a common interface, from a fixed quota to a receding-horizon reuse-first dispatcher, enabling a controlled, like-for-like comparison of management strategies. We operationalise the fourth objective by treating the cognitive mode --- static versus learning --- as an explicit experimental factor, and by exposing the station role to an external optimiser seeking the least irrigation that keeps every paddy free of stress. We achieve the fifth objective at the architectural level: farmer and station templates, decision hooks, the physical model and the governance roles are specified independently of any case-specific calibration, and new farmer or station types can be registered without modifying the model. The sixth objective, empirical transferability to an independently parameterised cyclic irrigation configuration, is explicitly scoped as bounded future validation work. Correspondingly, each of the eight hypotheses is anchored to a specific experimental factor and response-metric pairing (Table~\ref{tab:eabss_step2_operationalisation}), and H8 has been tested in full (Section~\ref{sec:verification}).
+\end{changed}
+
+% =============================================================================
+\section{Empirical Data Acquisition and Remote-Sensing Synchronization}
+
+\subsection{Rationale}
+\begin{changed}[the data actually used; AETI no longer forces the model]
+A cognitive digital twin requires a mechanism by which its internal state can be periodically synchronised against observations of the physical system it represents \citep{Tao2019DigitalTwin, Jones2020DigitalTwin}. For the Imbanuma model this problem is twofold: (1) no direct, field-scale measurement of standing water depth exists for the study area, and (2) remote-sensing products alone cannot resolve depth without an independent, empirically grounded water balance to anchor them. We therefore combine the block-scale empirical water balance reported by \cite{Okura2025WaterBalance} for the Shiroyama-Jimbee irrigation area with parcel-resolved inputs: the cadastral parcels of the district, the drainage network, a digital elevation model, Sentinel-2 canopy observations and gauge-corrected weather. Actual-evapotranspiration products such as pyWaPOR's \texttt{aeti\_24\_mm} were acquired but are not used to force or score the model: an absolute satellite ET estimate is not an independent validation of simulated ET, and an independent actual-ET product is needed before it can serve as one.
+\end{changed}
+
+\subsection{Empirical Data: Acquired vs.\ Requested}
+\begin{changed}[rows match the data the model uses]
+\centering
+\small
+\rowcolors{2}{gray!10}{white}
+\begin{tabular}{|p{3.4cm}|p{12.8cm}|}
+    \hline
+    \rowcolor[HTML]{F8F319}
+    \textbf{Source} & \textbf{Item} \\ \hline
+    \cite{Okura2025WaterBalance} (acquired) & Block water balance Tables 2--7, canal depths (Fig.~3), block irrigation and drainage (Fig.~8, digitised); the validation targets and the pins of the recapture ratios. \\ \hline
+    Cadastral parcels (acquired) & 4,002 Fude farmland polygons, classified North/South and cyclic/non-cyclic following Okura Fig.~1a. \\ \hline
+    Drainage network (acquired) & OpenStreetMap waterways and GSI channel centrelines, joined into the network of drains that reach the pumping-station pool. \\ \hline
+    GSI 5\,m DEM (acquired) & Parcel ground elevation for the backwater rule. \\ \hline
+    Sentinel-2 (acquired) & 10\,m NDVI for 2021 and 2022, setting canopy cover and therefore transpiration. \\ \hline
+    Open-Meteo (acquired) & Daily rainfall and ET$_0$; rainfall scaled to the on-site gauge's monthly totals (Okura Table~2). \\ \hline
+    MAFF (acquired) & Pumping-station capacity, 3.304\,m$^3$\,s$^{-1}$. \\ \hline
+    pyWaPOR (acquired, not used) & Daily \texttt{aeti\_24\_mm} and auxiliary \texttt{et\_look} rasters, 20\,m, 2021; retained for a future independent ET comparison. \\ \hline
+    LID / Okura et al.\ (requested) & Daily $IR_N$, $IR_S$, $D_N$, $D_S$, $W$, $O$ series (the model currently interpolates the published tables), plot-scale rating-curve discharge for Plots 1 and 2, and the station's daily operating log. \\ \hline
+    LID (requested) & Official block polygons, canal and farm-drain layout and pool geometry; exact transplanting, mid-season drainage and harvest dates for 2021 and 2022; target depths by growth stage. \\ \hline
+    Supplementary (requested) & Any direct or indirect lateral-flow measurements (piezometers, groundwater wells, tracer studies), which would test the inferred ratios of Section~\ref{sec:physical} directly. \\ \hline
+\end{tabular}
+\captionof{table}{Empirical data, split by whether it is already acquired or still requested.}
+\label{tab:data_acquired}
+\end{changed}
+
+\subsection{Methodology: Field-Scale Depth Estimation}
+\label{sec:depth-methodology}
+\begin{removed}[the AETI-based depth disaggregation (original Eqs.~2--7: daily depth, $\alpha$-weights, RUE/LUE scaling)]
+Superseded by Section~\ref{sec:physical}. Field depth is now simulated by the parcel-scale physics rather than reconstructed by integrating a block residual; drainage and lateral flow are no longer fixed shares ($RUE_{block}$, $LUE_{season}$) of irrigation but emerge from the farmers' decisions, the weir boards, the plow pan and the perched table, with only the recapture share pinned. The block identity of \cite{Okura2025WaterBalance} (their Eq.~2) moves to Section~\ref{sec:physical} as Eq.~\ref{eq:okura_lf}.
+\end{removed}
+
+\subsection{Validation Against Okura et al. (2025)}
+\label{sec:validation}
+\begin{changed}[the checks that are implemented]
+Three validation checks are performed against the empirical values reported in the source study. First, the simulated block balance --- $IR$, $D$, $ET$, $Lf$ for each block, and $W$, $O$, $LFV_{pump}$ and $\Delta WB$ for the district (Eq.~\ref{eq:okura_wb}) --- is compared with Tables 3--6 of \cite{Okura2025WaterBalance}, with reported $\Delta WB$ of $1919\times10^3$\,m$^3$ (2021) and $984\times10^3$\,m$^3$ (2022). Second, the reuse and efficiency ratios $RUE$, $LUE$ and $WUE'$ (Okura Eqs.~11--14) are compared with their reported values, $RUE_N = 0.25$--$0.35$, $RUE_S = 0.25$--$0.28$ and $LUE = 0.24$--$0.37$ across 2021--2022. Third, the recapture ratios fitted on one year are evaluated on the other (Section~\ref{sec:physical}). Finally, the model is checked qualitatively against the documented structural contrast between blocks: the North block is expected to exhibit backwater-dominated, lateral-flow-heavy behaviour, while the South block is expected to exhibit surface-drainage-dominated behaviour, consistent with the source study's Fig.~7; with backwater represented, simulated 2021 North drainage fell from 592 to 494\,mm against a measured 618\,mm, while the South block was barely affected \verify{2026-09-29 run}.
+
+Plot-level discharge (their Eq.~9) remains a planned check, pending the plot rating-curve data.
+\end{changed}
+
+\subsection{Limitations}
+\begin{changed}[limitations of the implemented model; the disaggregation limitations no longer apply]
+Lateral flow ($Lf_i$) remains a balance residual rather than a direct measurement, a limitation acknowledged in the source study itself, which notes that the reuse ratio may be underestimated. The recapture ratios inherit that limitation: they are constrained by the residual, not observed underground, and the split between their two axes is not identified. The soil constants of the physical model are uncalibrated, and the simulated lateral flow is about a third of the measured residual \verify{re-run}. Further limitations of the behavioural layer are discussed in Section~\ref{sec:limitations}.
+\end{changed}
+
+% =============================================================================
+\section{Limitations and Future Work}
+\label{sec:limitations}
+\begin{added}[what is deferred, and what the tests found]
+\textbf{Deferred processes.} Fertiliser application, nutrient transport and the pollution load reaching Lake Kita-Imbanuma; volumetric water prices and the farmer responses to them; pump energy and operating cost; land abandonment; and a copula-based generator of weather extremes \cite{Claassen2025} in place of the controlled scenarios used here.
+
+\textbf{Synchronisation.} The model is initialised from observations but not updated by them during a run. Completing the twin requires the daily irrigation and drainage series still requested from the LID, an assimilation scheme for pond depth, and an independent actual-ET product.
+
+\textbf{Behavioural calibration.} Archetype trait means are scenario assumptions. The sensitivity tests identify which of them matter --- above all how often farmers are at their fields --- and therefore which should be surveyed first.
+
+\textbf{Open findings.} Calendar lead delays the simulated demand peak instead of advancing it, and must be explained before calendar scenarios are interpreted. About 78\,\% of the irrigation farmers request in a season is never sent, while no crop is stressed at full pump capacity; whether farmers ask for more than they need, or the request double-counts inlets left running between checks, must be resolved before the request series is used as demand for an optimiser. Crop stress appears only when pump capacity binds, so yield-based comparisons need a supply-limited scenario.
+
+\textbf{Learning across seasons.} Learning acts within one 131-day season; multi-season memory, needed to test H3 as originally posed, is future work.
+\end{added}
+
+% =============================================================================
+\appendix
+\section{Mechanical fixes applied in this draft}
+\begin{added}[for the record; delete with the Revision Guide]
+\begin{itemize}
+    \item Duplicate subsection heading ``Hypothesis Operationalisation Mapping Matrix'' removed; ``7 core hypotheses'' made consistent (now eight).
+    \item Stray fragment ``\ldots historical outflows. of its human dimension.'' removed.
+    \item Empty citation key in \verb|\cite{, ElFartassi2025, ...}| removed.
+    \item Artificial Lab paragraph that appeared twice kept once.
+    \item Duplicate label \texttt{tab:state\_transitions} and placeholder figure labels replaced with unique labels.
+    \item ``Condtion'' and the state name ``Irrigation\_paddy'' fixed (table removed).
+    \item WUA replaced by LID throughout; station name unified as Hakusan-Jimbee pumping station in the Shiroyama-Jimbee area.
+    \item Pool given as $18\times68$\,m, 4\,m deep (was ``$18\times68$\,m$^2$''); season year made explicit (2021 and 2022).
+    \item Preamble: \texttt{xcolor} and \texttt{natbib} loaded once, \texttt{[table]} option added for \verb|\rowcolors|, contribution-table macros moved out of the body; tables inside revision boxes use \verb|\captionof|.
+    \item With \texttt{natbib} author--year, switch narrative citations to \verb|\citet| and parenthetical ones to \verb|\citep| in the clean version.
+\end{itemize}
+\end{added}
+
+\bibliographystyle{agsm}
+\bibliography{bib,revision_additions}
+\end{document}

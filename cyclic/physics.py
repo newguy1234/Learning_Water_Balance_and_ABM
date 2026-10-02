@@ -101,6 +101,11 @@ class Physics:
     plow_pan_k_mm_d: float = 9.5
     plow_pan_depth_mm: float = 150.0
     pond_infiltrate_ref_mm: float = 30.0
+    # Upward flow from the perched table back through the plow pan into a drained
+    # paddy's root zone, then its surface layer, at most K_pan mm/d (unit gradient).
+    # How neighbours' perched water reaches a paddy's ET. Off: perched water never
+    # returns to ET (the original model). Model B (cyclic.soil) fits with it on.
+    pan_capillary_rise: bool = False
     # Hooghoudt. The land improvement project left a dense drain network, hence short L.
     lateral_k_mm_d: float = 2000.0
     # Anisotropic horizontal conductivity (mm/d). None = use lateral_k_mm_d both ways.
@@ -340,7 +345,7 @@ class State:
 
 def advance(state, rain_mm, et0_mm, canopy, irrigation_mm, discharge_mm, p,
             k_z=None, k_x=None, k_y=None, edges=None, area_m2=None, stress="root_zone",
-            weir_mm=None):
+            weir_mm=None, et_demand_mm=None):
     """One day, in place on `state`. `canopy` is each paddy's cover fc (0-1). Returns the
     day's fluxes in mm per plot, and the day's Ks and Kr.
 
@@ -358,6 +363,10 @@ def advance(state, rain_mm, et0_mm, canopy, irrigation_mm, discharge_mm, p,
     set. Pond above the crest after ET and any chosen discharge leaves through the
     outlet the same day and counts as discharge (D), before the bund can overflow.
     None (default) = no board, only the chosen discharge.
+
+    `et_demand_mm` (optional, per plot, "supply" only): the ET each plot must meet today,
+    e.g. the satellite's, in place of the well-watered potential. What pond and topsoil
+    cannot supply is `stress_mm`, the unmet ET.
     """
     water, surface, deficit, perched = state.water, state.surface, state.deficit, state.perched
     n = water.size
@@ -371,8 +380,10 @@ def advance(state, rain_mm, et0_mm, canopy, irrigation_mm, discharge_mm, p,
         water, surface, deficit_0, canopy, p, wetted=wetted)
     et_potential = np.minimum(kc_cap, kcb + few * kc_cap) * et0_mm
     if stress == "supply":
-        taken = supply_et_demand(state, et_potential, p)
-        ks = np.divide(taken["et_mm"], et_potential, out=np.ones(n), where=et_potential > 0)
+        demand = et_potential if et_demand_mm is None else np.broadcast_to(
+            np.asarray(et_demand_mm, dtype=float), (n,))
+        taken = supply_et_demand(state, demand, p)
+        ks = np.divide(taken["et_mm"], demand, out=np.ones(n), where=demand > 0)
     else:
         taken = apply_et(state, ks * kcb * et0_mm, ke * et0_mm, p, force=False)
         taken["stress_mm"] = np.zeros(n)
@@ -398,11 +409,23 @@ def advance(state, rain_mm, et0_mm, canopy, irrigation_mm, discharge_mm, p,
     perched += infiltration - to_surface - to_root_zone
 
     neighbor_net = np.zeros(n)
+    out_x = np.zeros(n)
+    out_y = np.zeros(n)
     ratio_split = bool(getattr(p, "ratio_split", False))
     if edges is not None and not ratio_split:
-        from .lateral import exchange_perched
-        neighbor_net = exchange_perched(perched, edges, p, k_x, k_y, area_m2)
+        from .lateral import exchange_perched_parts
+        neighbor_net, out_x, out_y = exchange_perched_parts(perched, edges, p, k_x, k_y, area_m2)
         perched += neighbor_net
+
+    # Perched → root zone → surface layer through the pan; storage() is unchanged.
+    rise = np.zeros(n)
+    if bool(getattr(p, "pan_capillary_rise", False)):
+        k_up = np.broadcast_to(np.asarray(p.plow_pan_k_mm_d if k_z is None else k_z, dtype=float), (n,))
+        rise = np.minimum(np.minimum(k_up, np.maximum(perched, 0.0)), deficit + surface)
+        perched -= rise
+        to_root = np.minimum(rise, deficit)
+        deficit -= to_root
+        surface -= rise - to_root
 
     if ratio_split:
         lateral = np.zeros(n)
@@ -442,6 +465,9 @@ def advance(state, rain_mm, et0_mm, canopy, irrigation_mm, discharge_mm, p,
         "need_mm": taken["need_mm"],
         "canal_mm": np.zeros(n),
         "neighbor_mm": neighbor_net,
+        "neighbor_out_x_mm": out_x,
+        "neighbor_out_y_mm": out_y,
+        "rise_mm": rise,
         "lateral_mm": lateral,
         "deep_mm": deep,
         "stay_mm": deep,

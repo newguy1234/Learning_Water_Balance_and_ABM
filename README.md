@@ -255,10 +255,10 @@ separate. These names replace the previous ABM names in scripts and saved roster
 
 **Collaboration and the neighbour water level:** every farmer carries a
 `cooperation` level (0–1; archetypes from their traits, other farmers from
-params, default 0.5) and a `neighbour_offset` (−1 drier … +1 wetter than its
-neighbours; archetype bases in `abm.agents.NEIGHBOUR_OFFSET`). Each paddy's
+params, default 0.5) and a `neighbour_wetness_bias` (−1 drier … +1 wetter than its
+neighbours; archetype bases in `abm.agents.ARCHETYPES`). Each paddy's
 target drifts softly by
-`cooperation·(neighbour level − target) + (1 − cooperation)·offset·15 mm`:
+`cooperation·(neighbour level − target) + (1 − cooperation)·bias·15 mm`:
 collaborative farmers level their water with the (up to 4) neighbouring paddies,
 uncollaborative ones hold their own preferred level. Weight 0.3, tanh-capped at
 20 mm, neighbour level remembered at 30 %/day, so targets move at most ±6 mm.
@@ -268,10 +268,19 @@ and the rest uncollaborative (0.05); cooperation still evolves through learning
 afterwards. Custom farmers use it via `self.neighbour_target(obs, target)`
 (see `my_farmer` in `example.py`).
 
-Each farmer has persistent, seed-reproducible wealth, experience, knowledge,
-labour, cooperation, work ethic and risk traits, plus descriptive age. Traits
-influence water targets, drainage capacity, coordination and monitoring cadence.
-Age does not prescribe a behaviour. Between monitoring visits, farmers retain
+Each farmer has 12 persistent, seed-reproducible personality traits
+(`abm.farmer.TRAITS`): `experience`, `water_accounting`, `cooperation`,
+`work_ethic`, `risk_tolerance`, `neighbour_wetness_bias`, `calendar_lead`,
+`drawdown_tolerance`, `refill_overshoot`, `off_farm_work`, `forecast_reliance`
+and `flow_through_habit`, plus descriptive age. Each trait's `meaning` says what
+it does in the decision rules; the **Trait guide** tab of the sensitivity viewer
+(`python scripts/abm_sensitivity.py --view`) explains every one in plain words
+with its tested effect on demand. Earlier names (`part_time`, `overfill`,
+`knowledge` …) are still accepted (`abm.farmer.RENAMED_TRAITS`). `wealth` and
+`price_sensitivity` were removed (they only acted on a volumetric water price,
+which land-improvement districts do not charge), and `labour` was merged into
+`work_ethic` (the check interval only used the two together). Age does not
+prescribe a behaviour. Between monitoring visits, farmers retain
 inlet/outlet settings. Farmers learn from water scarcity and crop stress, and can
 copy the previous day's inlet/outlet settings and target strategy of a better
 performing neighbouring owner. Neighbours are owners of adjacent paddies,
@@ -283,7 +292,7 @@ and reconstructs the same initial population for the same seed.
 not fitted numerical parameters. `ARCHETYPES` in `abm/agents.py` contains editable
 scenario defaults. Learning uses an observable score (crop stress coefficient
 minus irrigation and drainage penalties), not measured profit or a validated
-causal yield effect. Fertiliser, wealth accounting and economic incentives are
+causal yield effect. Fertiliser, water pricing and economic incentives are
 not simulated. The opportunist responds to immediately available water. The
 adaptive experimenter explores bounded variations in irrigation demand; it does
 not invoke a separate optimisation service. `learning_rate=0` disables adaptation

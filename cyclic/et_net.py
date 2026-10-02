@@ -1,9 +1,16 @@
-"""Neural Okura matcher: IR/D placement + per-paddy soil / sideways permeability.
+"""Neural Okura matcher (model A): where the block irrigation and discharge go.
 
 Season IR/D aggregates are the hard target. Day shape uses Open-Meteo rain, ET,
 soil moisture, and rain hours (no Fig. 8). Within a day: cover ET first, then
-free leftover placement. Leftover kx/ky/kz/ground ratios are a separate agent.
-Train with `train_et_net()` → et_net.pt.
+free leftover placement. Model A learns only irrigation and discharge placement;
+soil permeability (Kz, Kx, Ky) is model B, `cyclic.soil`. The training surrogate
+runs on fixed base permeabilities. Train with `train_et_net()` → et_net.pt.
+
+Irrigation is placed by the network's scores alone: no paddy is guaranteed its ET.
+Which paddies were wet or dry is learned from Landsat thermal ET (`cyclic.landsat`)
+on clear pass days: pond depth should rise and fall with the thermal ET fraction
+across paddies, and paddies thermal shows clearly unflooded (ETf < THERMAL_DRY_ETF)
+should have no pond. ET that this water does not cover is model B's to meet.
 """
 
 from __future__ import annotations
@@ -20,8 +27,13 @@ from .identify import match_block_volumes
 
 AGENT_DIR = os.path.join(data.PROJECT, "outputs", "agents")
 WEIGHTS_NAME = "et_net.pt"
+# Fixed soil in the training surrogate only; per-paddy soil is cyclic.soil (model B).
 BASE_KZ = 13.0
 BASE_KLAT = 2000.0
+N_OUT = 3
+THERMAL_DRY_ETF = 0.6      # below this a rice paddy cannot be ponded (flooded ETf ≈ 1)
+THERMAL_PATTERN_WEIGHT = 0.5
+THERMAL_DRY_WEIGHT = 0.3
 
 
 def _torch():
@@ -31,11 +43,12 @@ def _torch():
 
 
 class SpillNet:
-    """MLP → IR score, D score, spill scale, vertical K, lateral K."""
+    """MLP → IR score, D score, spill scale."""
 
     FEATURE_NAMES = (
         "depth", "et", "rain", "need", "sat_et", "topsoil", "flood", "day",
         "okura_ir", "okura_d", "north", "south", "cyclic", "canal_dist",
+        "elevation", "pool_dist",
     )
 
     def __init__(self, hidden=64):
@@ -47,7 +60,7 @@ class SpillNet:
             nn.Tanh(),
             nn.Linear(hidden, hidden),
             nn.Tanh(),
-            nn.Linear(hidden, 5),
+            nn.Linear(hidden, N_OUT),
         )
         self.hidden = int(hidden)
 
@@ -58,6 +71,13 @@ class SpillNet:
         return self.net.state_dict()
 
     def load_state_dict(self, state):
+        # Weights saved before model B carried two soil heads (Kz, K_lat); keep the
+        # irrigation, discharge and spill rows.
+        last = f"{len(self.net) - 1}"
+        state = dict(state)
+        for key in (f"{last}.weight", f"{last}.bias"):
+            if key in state and state[key].shape[0] > N_OUT:
+                state[key] = state[key][:N_OUT]
         self.net.load_state_dict(state)
 
     def forward(self, x):
@@ -66,15 +86,24 @@ class SpillNet:
         ir = torch.nn.functional.softplus(raw[:, 0]) + 0.05
         dr = torch.nn.functional.softplus(raw[:, 1]) + 0.05
         spill = 0.15 + 0.85 * torch.sigmoid(raw[:, 2])
-        # Centered log-range so K is not pinned at a sigmoid ceiling.
-        # Kz ~ 5–34 mm/d around BASE_KZ; K_lat ~ 0.3–3.3× BASE_KLAT.
-        kz = BASE_KZ * torch.exp(0.95 * torch.tanh(raw[:, 3]))
-        klat = BASE_KLAT * torch.exp(1.2 * torch.tanh(raw[:, 4]))
-        return ir, dr, spill, kz, klat
+        return ir, dr, spill
+
+
+def static_features(paddy_id):
+    """Ground elevation (m, GSI 5 m DEM) and distance to the pumping station (m) per paddy."""
+    from .paddy_export import load_paddy_dataset
+
+    ds = load_paddy_dataset(2022)
+    if not np.array_equal(ds.paddy.values.astype(str), np.asarray(paddy_id).astype(str)):
+        raise ValueError("paddy order differs from the ABM paddy export")
+    elev = ds.ground_elev_m.values.astype(np.float32)
+    elev = np.where(np.isfinite(elev), elev, np.nanmean(elev)).astype(np.float32)
+    return elev, ds.pool_distance_m.values.astype(np.float32)
 
 
 def feature_matrix(depth, et, rain, need, sat_et, topsoil, day, okura_ir, okura_d,
-                   block, cyclic, canal_dist=None, n_days=131, flood=None):
+                   block, cyclic, canal_dist=None, n_days=131, flood=None,
+                   elevation=None, pool_dist=None):
     depth = np.asarray(depth, dtype=np.float32)
     n = depth.size
     north = (np.asarray(block) == "North").astype(np.float32)
@@ -111,6 +140,10 @@ def feature_matrix(depth, et, rain, need, sat_et, topsoil, day, okura_ir, okura_
         1.0 - north,
         cyc,
         np.clip(dist / 500.0, 0.0, 3.0),
+        np.zeros(n, dtype=np.float32) if elevation is None
+        else np.asarray(elevation, dtype=np.float32) / 5.0,
+        np.zeros(n, dtype=np.float32) if pool_dist is None
+        else np.clip(np.asarray(pool_dist, dtype=np.float32) / 3000.0, 0.0, 3.0),
     ]).astype(np.float32)
 
 
@@ -257,6 +290,12 @@ def build_training_year(year=2021, physics=None):
     cyclic = np.asarray(model.inputs.cyclic, dtype=bool)
     ncb = ~cyclic
     canal = np.asarray(getattr(model.inputs, "canal_distance_m", np.zeros(model.n)), dtype=np.float32)
+    elevation, pool_dist = static_features(model.inputs.paddy_id)
+    from .landsat import load_paddy_thermal_et
+
+    thermal = load_paddy_thermal_et(year)
+    thermal_by_day = ({int(d): np.asarray(e, dtype=np.float32) for d, e in zip(thermal["day"], thermal["etf"])}
+                      if thermal is not None else {})
     days = []
     for d in range(model.n_days):
         morn = np.asarray(model.state.water, dtype=np.float32).copy()
@@ -288,6 +327,7 @@ def build_training_year(year=2021, physics=None):
             want_ir_n=_volume_map(plan_ir, area, block, ncb),
             want_d_n=_volume_map(plan_d, area, block, ncb),
             area=area, block=block, cyclic=cyclic, ncb=ncb, canal_dist=canal,
+            elevation=elevation, pool_dist=pool_dist, thermal_etf=thermal_by_day.get(d),
             outlet=float(model.physics.outlet_loss_per_day),
             bund=float(model.physics.bund_mm),
             href=float(getattr(model.physics, "pond_infiltrate_ref_mm", 30.0)),
@@ -299,13 +339,14 @@ def build_training_year(year=2021, physics=None):
 
 
 def _surrogate_day(net, day, depth):
-    """One morning: pin IR/D, apply Kz infiltration + lateral mix, return loss and new depth."""
+    """One morning: pin IR/D, apply base-Kz infiltration + lateral mix, return loss and new depth."""
     torch = _torch()[0]
     x = feature_matrix(
         depth.detach().cpu().numpy() if torch.is_tensor(depth) else day["morn"],
         day["et"], day["rain"], day["need_full"], day["sat_et"], day["topsoil"],
         day["day"], day["okura_ir"], day["okura_d"], day["block"], day["cyclic"],
-        day.get("canal_dist"), day["n_days"], flood=day.get("flood"))
+        day.get("canal_dist"), day["n_days"], flood=day.get("flood"),
+        elevation=day.get("elevation"), pool_dist=day.get("pool_dist"))
     # Use live depth in features when unrolling.
     if torch.is_tensor(depth):
         x = torch.as_tensor(x)
@@ -315,7 +356,8 @@ def _surrogate_day(net, day, depth):
         x = torch.as_tensor(x)
         depth = torch.as_tensor(day["morn"], dtype=torch.float32)
 
-    ir_s, dr_s, spill, kz, klat = net.forward(x)
+    ir_s, dr_s, spill = net.forward(x)
+    kz = torch.full_like(ir_s, BASE_KZ)
     area = torch.as_tensor(day["area"], dtype=torch.float32)
     block = day["block"]
     cyclic = day["cyclic"]
@@ -328,10 +370,9 @@ def _surrogate_day(net, day, depth):
     et = torch.as_tensor(day["et"], dtype=torch.float32)
     rain = float(day["rain"])
     er = float(okura.effective_rain_mm(rain))
-    # Cover ET with pond + *useful* rain first; net places leftover IR freely.
-    cover = torch.clamp(et - er - torch.clamp(depth, min=0.0), min=0.0)
-    ir_mm = (_torch_et_cover_then_free(cover, ir_s, want_ir_c, area, block, cyclic)
-             + _torch_et_cover_then_free(cover, ir_s, want_ir_n, area, block, ncb))
+    # The network's scores place the whole block total; ET is not funded first.
+    ir_mm = (_torch_match_mask(ir_s, want_ir_c, area, block, cyclic)
+             + _torch_match_mask(ir_s, want_ir_n, area, block, ncb))
 
     spill_c, spill_n = [], []
     for name in ("North", "South"):
@@ -358,19 +399,8 @@ def _surrogate_day(net, day, depth):
     infil = torch.minimum(kz * (water / href), water)
     water = water - infil
     scored = dr_mm + overflow + spill_mm
-
-    # Sideways: plots with higher K_lat equalise pond toward block mean (heterogeneous soil).
-    mix = torch.clamp(klat / (BASE_KLAT * 4.0), 0.0, 0.35)
-    new_depth = water.clone()
-    for name in ("North", "South"):
-        for mask in (cyclic, ncb):
-            sel_np = (np.asarray(block) == name) & np.asarray(mask, dtype=bool)
-            if not np.any(sel_np):
-                continue
-            sel = torch.as_tensor(sel_np)
-            mass = (new_depth[sel] * area[sel]).sum().clamp_min(1e-9)
-            mean = mass / area[sel].sum().clamp_min(1e-9)
-            new_depth = torch.where(sel, new_depth + mix * (mean - new_depth), new_depth)
+    # Ponds do not mix across bunds; sideways soil flow is model B's.
+    new_depth = water
 
     loss = torch.zeros((), dtype=torch.float32)
     n_terms = 0
@@ -389,15 +419,36 @@ def _surrogate_day(net, day, depth):
             n_terms += 2
 
     # --- Theory-guided / SOTA-style soft physics (no Fig. 8 labels) ---------------------
-    # FAO-56 / IPICS: cover ET (already); MPC zone control: keep pond in a soft band.
-    shortfall = torch.relu(et - (torch.clamp(depth, min=0.0) + ir_mm + er))
-    et_scale = et.mean().clamp_min(0.5)
-    loss = loss + 0.35 * ((shortfall * area).sum() / (area.sum().clamp_min(1.0) * et_scale))
-    n_terms += 1
+    # MPC zone control: keep pond in a soft band, except where thermal says dry today.
+    thermal = day.get("thermal_etf")
+    dry_today = (np.isfinite(thermal) & (thermal < THERMAL_DRY_ETF)) if thermal is not None \
+        else np.zeros(area.numel(), dtype=bool)
     pond_lo, pond_hi = 8.0, 55.0
-    zone = (torch.relu(pond_lo - new_depth) + torch.relu(new_depth - pond_hi)) / 30.0
+    zone = (torch.relu(pond_lo - new_depth) * torch.as_tensor(~dry_today)
+            + torch.relu(new_depth - pond_hi)) / 30.0
     loss = loss + 0.12 * (zone * area).sum() / area.sum().clamp_min(1.0)
     n_terms += 1
+
+    # Landsat thermal ET on a clear pass: wetter paddies evaporate more.
+    if thermal is not None:
+        seen = np.isfinite(thermal)
+        if seen.sum() > 50:
+            sel = torch.as_tensor(seen)
+            w = area[sel]
+            obs = torch.as_tensor(thermal[seen], dtype=torch.float32)
+            pond = new_depth[sel]
+            obs_a = obs - (obs * w).sum() / w.sum()
+            pond_a = pond - (pond * w).sum() / w.sum()
+            cov = (obs_a * pond_a * w).sum() / w.sum()
+            var = ((obs_a ** 2 * w).sum() / w.sum()).clamp_min(1e-9) * \
+                ((pond_a ** 2 * w).sum() / w.sum()).clamp_min(1e-6)
+            loss = loss + THERMAL_PATTERN_WEIGHT * (1.0 - cov / var.sqrt())
+            n_terms += 1
+            if bool(dry_today.any()):
+                dry = torch.as_tensor(dry_today)
+                loss = loss + THERMAL_DRY_WEIGHT * (new_depth[dry] * area[dry]).sum() / (
+                    area[dry].sum().clamp_min(1.0) * 20.0)
+                n_terms += 1
 
     # Wet-day IR pause: MAFF useful rain (not raw drizzle / uncapped storms).
     wet = float(np.clip(er / 12.0, 0.0, 1.0))
@@ -455,13 +506,6 @@ def _surrogate_day(net, day, depth):
                     area.sum().clamp_min(1.0) * (ir_all.detach().clamp_min(1.0) / area.sum().clamp_min(1.0) * 1000.0 + 1.0))
                 n_terms += 1
 
-    loss = loss + 0.03 * ((kz.mean() / BASE_KZ - 1.0) ** 2
-                          + (klat.mean() / BASE_KLAT - 1.0) ** 2)
-    for k, base in ((kz, BASE_KZ), (klat, BASE_KLAT)):
-        cv = k.std() / k.mean().clamp_min(1e-3)
-        loss = loss + 0.02 * torch.relu(0.25 - cv) ** 2
-        loss = loss + 0.004 * ((k.mean() - base) / base) ** 2
-    n_terms += 3
     # Eq. 3 leftover proxy on cyclic paddies (IR + R − D − ET), m³.
     et_t = torch.as_tensor(day["et"], dtype=torch.float32)
     if bool(sel_c.any()):
@@ -471,7 +515,7 @@ def _surrogate_day(net, day, depth):
     lfv_day = torch.as_tensor(float(day.get("lfv_day_m3", 0.0)), dtype=torch.float32)
     extras = dict(ir_all_m3=ir_all, d_cyc_m3=d_cyc, w_proxy_m3=w_proxy,
                   lf_proxy_m3=lf_proxy, lfv_day_m3=lfv_day)
-    return loss, n_terms, new_depth, kz, klat, extras
+    return loss, n_terms, new_depth, extras
 
 
 def train_et_net(train_years=(2021,), epochs=40, lr=0.02, hidden=64, progress=None):
@@ -479,7 +523,7 @@ def train_et_net(train_years=(2021,), epochs=40, lr=0.02, hidden=64, progress=No
 
     Default train year is 2021 only so 2022 is a true unseen holdout.
     Hard: Table 4/5 day IR/D aggregates. Soft: ET cover, pond zone (MPC), wet-day
-    pause, midsummer off, IR–D→W proxy, TgLSTM ΔIR, season W / Lf / LFV / dWB.
+    pause, midsummer off, IR–D→W proxy, TgLSTM ΔIR, season W / Lf (surface balance).
     """
     torch, _ = _torch()
     if isinstance(train_years, int):
@@ -501,16 +545,14 @@ def train_et_net(train_years=(2021,), epochs=40, lr=0.02, hidden=64, progress=No
             prev_ir = None
             w_season = torch.zeros((), dtype=torch.float32)
             lf_season = torch.zeros((), dtype=torch.float32)
-            lfv_season = torch.zeros((), dtype=torch.float32)
             year = int(days[0].get("year", 2021))
             for t, day in enumerate(days):
-                part, n, depth, _kz, _klat, extras = _surrogate_day(net, day, depth)
+                part, n, depth, extras = _surrogate_day(net, day, depth)
                 loss = loss + part
                 n_terms += n
                 ir_all = extras["ir_all_m3"]
                 w_season = w_season + extras["w_proxy_m3"]
                 lf_season = lf_season + extras["lf_proxy_m3"]
-                lfv_season = lfv_season + extras["lfv_day_m3"]
                 # TgLSTM-style fluctuation: mild day-to-day IR change (not Fig. 8).
                 if prev_ir is not None:
                     scale = max(float(ir_all.detach()), float(prev_ir.detach()), 1.0)
@@ -520,21 +562,16 @@ def train_et_net(train_years=(2021,), epochs=40, lr=0.02, hidden=64, progress=No
                 if (t + 1) % 8 == 0:
                     depth = depth.detach()
                     prev_ir = prev_ir.detach()
-            # Soft season identities (portable aggregates — not digitised daily ops).
+            # Soft season identities of the surface balance (portable aggregates — not
+            # digitised daily ops). LFV and dWB are soil, fitted by model B.
             t5 = okura.TABLE5_1000M3[year]
             want_w = float(t5["W"]) * 1000.0
-            want_lfv = float(t5["LFV_pump"]) * 1000.0
-            want_dwb = float(t5["dWB"]) * 1000.0
             want_lf = float(sum(
                 okura.TABLE4_MM[(b, year)]["lateral"] * okura.cyclic_area_m2(b) / 1000.0
                 for b in okura.BLOCKS))
             loss = loss + 0.05 * ((w_season - want_w) / max(want_w, 1.0)) ** 2
             loss = loss + 0.04 * ((lf_season - want_lf) / max(want_lf, 1.0)) ** 2
-            loss = loss + 0.04 * ((lfv_season - want_lfv) / max(want_lfv, 1.0)) ** 2
-            # dWB residual of leftover vs LFV capture (Eq. 3 / Table 5 identity).
-            loss = loss + 0.03 * (
-                ((lf_season - lfv_season) - want_dwb) / max(want_dwb, 1.0)) ** 2
-            n_terms += 4
+            n_terms += 2
         loss = loss / max(n_terms, 1)
         loss.backward()
         opt.step()
@@ -547,7 +584,11 @@ def train_et_net(train_years=(2021,), epochs=40, lr=0.02, hidden=64, progress=No
 
 @register_agent
 class ETNet(FieldAggregate):
-    """Neural Okura matcher with spatially varying plow-pan and lateral permeability."""
+    """Neural Okura matcher: irrigation and discharge placement (model A).
+
+    Per-paddy soil permeability comes from model B (`cyclic.soil`) when a fitted soil
+    field is saved; otherwise the Physics defaults.
+    """
 
     name = "et_net"
     training_years = ()
@@ -559,7 +600,7 @@ class ETNet(FieldAggregate):
         auto_train=0.0,   # 1 = train on the spot if no saved weights (never by default)
         irrigate_ncb=1.0,
         neural_discharge=0.0,
-        k_ema=0.08,
+        use_soil_field=1.0,  # 0 = Physics default soil, e.g. while making model B's forcing
         place_ema=0.22,
         schedule="fig8",
         hard_surface=1.0,
@@ -597,14 +638,10 @@ class ETNet(FieldAggregate):
                 f"et_net has no usable trained weights ({weights_status().detail}). "
                 "Train once with cyclic.train_et_net() (saved to outputs/agents/et_net.pt), "
                 "or pass auto_train=1 to this farmer.")
-        n = model.n
-        model.k_z = np.full(n, BASE_KZ, dtype=float)
-        model.k_x = np.full(n, BASE_KLAT, dtype=float)
-        model.k_y = np.full(n, BASE_KLAT, dtype=float)
-        self._kz = model.k_z
-        self._kx = model.k_x
-        self._ky = model.k_y
-        self._k_ready = False
+        self._elevation, self._pool_dist = static_features(model.inputs.paddy_id)
+        if float(self.params.get("use_soil_field", 1.0)):
+            from .soil import apply_soil_field
+            apply_soil_field(model)
         self._ir_w = None
 
     def __repr__(self):
@@ -650,35 +687,18 @@ class ETNet(FieldAggregate):
         x = feature_matrix(
             full_depth, full_et, rain, full_need, full_sat, full_top, day,
             self.irrigation[day], self.discharge[day], self._block, self._cyclic,
-            canal, n_days, flood=full_flood)
+            canal, n_days, flood=full_flood, elevation=self._elevation, pool_dist=self._pool_dist)
         self._net.net.eval()
         with torch.no_grad():
-            ir_s, dr_s, _spill, kz, klat = self._net.forward(torch.as_tensor(x))
+            ir_s, dr_s, _spill = self._net.forward(torch.as_tensor(x))
             ir_s = ir_s.cpu().numpy()
             dr_s = dr_s.cpu().numpy()
-            kz = kz.cpu().numpy()
-            klat = klat.cpu().numpy()
-
-        # Soil permeability drifts slowly — it is not rewritten every morning.
-        a_k = float(np.clip(self.params.get("k_ema", 0.08), 0.0, 1.0))
-        if self._k_ready and a_k < 1.0:
-            kz = (1.0 - a_k) * np.asarray(self._kz, dtype=float) + a_k * kz
-            klat = (1.0 - a_k) * np.asarray(self._kx, dtype=float) + a_k * klat
-        self._k_ready = True
-        self._model.k_z = kz
-        self._model.k_x = klat
-        self._model.k_y = klat
-        self._kz = kz
-        self._kx = klat
-        self._ky = klat
 
         area = self._area
         block = self._block
         cyclic = self._cyclic
         ncb = ~cyclic
-        # ET cover first (mm): pond + MAFF useful rain; then free leftover IR.
-        er = float(okura.effective_rain_mm(rain))
-        cover_full = np.maximum(full_et - er - np.maximum(full_depth, 0.0), 0.0)
+        # The network's scores place the whole block total; ET is not funded first.
         free_w = np.maximum(ir_s, 1e-6)
         if self._flood_signal_usable(full_flood):
             free_w = free_w * (0.15 + 0.85 * np.maximum(full_flood, 0.0))
@@ -687,16 +707,14 @@ class ETNet(FieldAggregate):
             free_w = (1.0 - a_p) * self._ir_w + a_p * free_w
         self._ir_w = free_w
 
-        from .identify import match_et_cover_then_free
-
         want_ir_c, want_ir_n = {}, {}
         for name in ("North", "South"):
             sel_c = (block == name) & cyclic
             sel_n = (block == name) & ncb
             want_ir_c[name] = float((self.irrigation[day, sel_c] * area[sel_c]).sum() / 1000.0) if np.any(sel_c) else 0.0
             want_ir_n[name] = float((self.irrigation[day, sel_n] * area[sel_n]).sum() / 1000.0) if np.any(sel_n) else 0.0
-        ir_c = match_et_cover_then_free(want_ir_c, area, block, cyclic, cover_full, free_w)
-        ir_n = match_et_cover_then_free(want_ir_n, area, block, ncb, cover_full, free_w)
+        ir_c = match_block_volumes(want_ir_c, area, block, cyclic, weights=area * free_w)
+        ir_n = match_block_volumes(want_ir_n, area, block, ncb, weights=area * free_w)
         irrigation_rows = np.where(ncb, ir_n, ir_c)[rows]
 
         base_dr = self._spill_adjusted_discharge(

@@ -10,3 +10,10 @@ build/
 
 # Downloaded Copernicus SAFE zips (large)
 data/copernicus/
+
+# Regenerable run outputs and raw downloads
+outputs/sensitivity/
+outputs/lateral/
+outputs/checkpoints/
+outputs/soil/forcing_*.npz
+data/landsat/L*.npz

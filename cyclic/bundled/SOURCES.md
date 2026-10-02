@@ -59,15 +59,35 @@ short of the legend with white space between.
 
 ## Drainage channels: `infrastructure.geojson`
 
-OpenStreetMap waterways (`river`, `stream`, `ditch`, `drain`, `canal`) in the box, via the
-Overpass API. © OpenStreetMap contributors, available under the Open Database License (ODbL).
+Two mapped sources, each feature tagged with its `source`:
+
+* OpenStreetMap waterways (`river`, `stream`, `ditch`, `drain`, `canal`), via the Overpass API.
+  © OpenStreetMap contributors, available under the Open Database License (ODbL).
+* GSI river / channel centrelines (国土地理院 ベクトルタイル 河川中心線, `experimental_rvrcl`,
+  z16), including narrow channels (細河川) and underground man-made channels
+  (人工水路（地下）, marked as culverts). These map many farm and collector drains that OSM
+  lacks. First-class rivers (一級河川) are kept as `river`.
+
+Roles:
 
 * `main_canal`: OSM way 60622667, the channel along the lake dyke through the station
   (2.4 km), matching Okura Fig. 1b's main drainage canal.
-* `connected_drain`: drainage channels joined to it (ends within 15 m), 9.1 km.
-* `other_drain`: channels of other systems (128.5 km), which do not reach this pool.
+* `connected_drain`: drainage channels joined to the main canal, 40.9 km (25.8 km GSI,
+  15.1 km OSM). Rules, all inferences on the mapped lines:
+  * channel ends within 25 m are joined (drains pass under farm roads through short culverts
+    the maps leave out; connected length rises from 29 km at 15 m to 45 km at 25 m and levels
+    off, 46 km at 50 m);
+  * only channels within 250 m of cyclic parcels count (Okura Fig. 2b: non-cyclic blocks drain
+    out of the scheme), and connected channels are clipped to that area, so drainage leaves
+    the district only at the station, never on to the rivers;
+  * lines drawn mostly across the open lake (OSM 印旛沼 water area) are lake flow lines, not
+    drains, and are left out.
+* `other_drain`: channels of other systems (373 km), which do not reach this pool.
 * `river`: natural rivers, for context; not used for connectivity (they meet the drains at
   gates and culverts).
+
+Irrigation pipeline routes are **not** included: GSI road centrelines map the farm roads
+along which pipelines usually run, but no source ties this district's pipes to them.
 
 ## Pipes, structures and underground collection (also in `infrastructure.geojson`)
 

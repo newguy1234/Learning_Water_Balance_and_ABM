@@ -111,10 +111,6 @@ class SeasonConfig:
     # collaborative (cooperation 0.95, levels its water with the neighbours) and the rest
     # uncollaborative (0.05, keeps its own level). None = every farmer keeps its own trait.
     collaborative_share: float | None = None
-    # Volumetric water price (per m3 applied). 0 = area-based fees only (the Japanese
-    # land-improvement-district norm: no marginal cost). Farmers run a pricing check
-    # against it (abm.farmer.BaseFarmer.price_multiplier).
-    water_price_per_m3: float = 0.0
     # Flow speed (m/s) of surface drainage through farm drains and the channel network to
     # the pool (assumption: slow flat-lowland drains). D is released evenly through the day,
     # so the share arriving the same day is 1 − travel time (days). None or 0 = every
@@ -129,6 +125,10 @@ class SeasonConfig:
     # Irrigation pumping station capacity (m3/s). MAFF: 白山甚兵衛機場 max supply 3.304 m3/s.
     # None = no limit beyond the water available.
     pump_capacity_m3_s: float | None = 3.304
+    # Per-paddy soil permeability (Kz, Kx, Ky) fitted by cyclic.soil (model B), with
+    # perched water rising through the plow pan to a drained paddy's ET. False = the
+    # uniform Physics defaults. Needs outputs/soil/soil_field.npz for these paddies.
+    soil_field: bool = False
     use_cyclic_map: bool = True
     # Toy-grid fallback only if use_cyclic_map=False.
     nrows: int | None = None
@@ -268,6 +268,7 @@ class WaterWorld:
         self.bund_height_mm = float(cfg.bund_height_mm)
         # cyclic's soil/drain constants; only the bund height is an ABM scenario knob.
         self.soil_physics = Physics().replace(bund_mm=self.bund_height_mm)
+        self.k_z = self.k_x = self.k_y = None
         self.pool_capacity_m3 = float(
             cfg.pool_capacity_m3 if cfg.pool_capacity_m3 is not None
             else self.soil_physics.pool_capacity_m3
@@ -309,6 +310,16 @@ class WaterWorld:
         self.station_lonlat = STATION_LONLAT
         heights = getattr(land, "ground_elev_m", None)
         self.ground_elev_m = None if heights is None else np.asarray(heights, dtype=float)
+        if cfg.soil_field:
+            from cyclic.soil import soil_k_for
+
+            k = soil_k_for(land.paddy_id)
+            if k is None:
+                raise FileNotFoundError(
+                    "soil_field=True but no fitted soil field matches these paddies; "
+                    "run scripts/soil_model_b.py first")
+            self.k_z, self.k_x, self.k_y = k
+            self.soil_physics = self.soil_physics.replace(pan_capillary_rise=True)
         self.edges = land.edges
         self.graph = land.graph
         self.neighbours = land.neighbours
@@ -469,7 +480,7 @@ class WaterWorld:
         self.etc_cum = 0.0
         self.relative_yield = np.ones(self.n)
         # Each paddy's crop calendar shift (days ahead of the district calendar), set by
-        # its owner's eagerness (abm.model.DistrictModel keeps it in sync).
+        # its owner's calendar_lead (abm.model.DistrictModel keeps it in sync).
         self.calendar_shift_days = np.zeros(self.n, dtype=int)
         self.last_request = np.zeros(self.n)
         self.request_cum = np.zeros(self.n)
@@ -784,7 +795,6 @@ class WaterWorld:
         # Rain forecast, today first (the farmer decides how far ahead to trust it).
         obs["rain_forecast_mm"] = np.array(
             [self.rain_series[min(self.day + k, len(self.rain_series) - 1)] for k in range(6)], dtype=float)
-        obs["water_price_per_m3"] = float(self.config.water_price_per_m3)
         obs["bund_mm"] = float(self.bund_height_mm)
         obs["neighbour_mean_mm"] = np.array(
             [
@@ -872,8 +882,8 @@ class WaterWorld:
             np.asarray(requested_mm, dtype=float), (self.n,)).copy()
         flux = advance(
             self.soil, rain, et0, self.canopy_cover(self.day), ir, dr_request,
-            self.soil_physics, edges=self.edges, area_m2=area, stress="supply",
-            weir_mm=weir,
+            self.soil_physics, k_z=self.k_z, k_x=self.k_x, k_y=self.k_y,
+            edges=self.edges, area_m2=area, stress="supply", weir_mm=weir,
         )
         # Backwater: what a high canal holds back stays on the field (it seeps out later).
         frac = self.backwater_fraction(self.day)

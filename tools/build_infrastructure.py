@@ -1,11 +1,12 @@
 """Build the district's infrastructure layer and parcel membership (cyclic/bundled/).
 
-    python tools/build_infrastructure.py "<path to Okura et al. 2025 PDF>"
+    python tools/build_infrastructure.py "<path to Okura et al. 2025 PDF>" [gsi_cache.json]
 
 Writes
-    cyclic/bundled/infrastructure.geojson   drainage channels from OpenStreetMap, each with a
-                                            role (main_canal / connected_drain / other_drain /
-                                            river), plus the pumping station and its pool
+    cyclic/bundled/infrastructure.geojson   drainage channels from OpenStreetMap and GSI channel
+                                            centrelines, each with a role (main_canal /
+                                            connected_drain / other_drain / river), plus the
+                                            pumping station, structures and documented notes
     cyclic/bundled/okura_fig3_canal_depth.csv  daily main drainage canal depth (North / South
                                             ADCP sites) digitised from Okura et al. Fig. 3
     cyclic/bundled/paddy_elevation.csv      each member parcel's median ground elevation (GSI 5 m DEM)
@@ -52,11 +53,15 @@ STATION = (140.26372, 35.80755)
 # The OSM channel along the lake dyke through the station: Okura Fig. 1b's main drainage canal.
 MAIN_CANAL_WAYS = (60622667,)
 BOX = (35.740, 140.215, 35.880, 140.310)          # south, west, north, east
-SNAP_M = 15.0                                     # channel ends this close are joined
+# Channel ends this close are joined. Drains pass under farm roads through short culverts
+# the maps leave out (road + verges < 25 m); connectivity in the cyclic area rises from
+# 29 km at 15 m to 45 km at 25 m and then levels off (46 km at 50 m).
+SNAP_M = 25.0
 
 OVERPASS = f"""[out:json][timeout:150];
 (
   way["waterway"~"^(river|stream|ditch|drain|canal)$"]({BOX[0]},{BOX[1]},{BOX[2]},{BOX[3]});
+  way["natural"="water"]["name"~"印旛沼"]({BOX[0]},{BOX[1]},{BOX[2]},{BOX[3]});
 );
 out tags geom;"""
 
@@ -91,27 +96,118 @@ def metres(lon, lat):
             (lat - STATION[1]) * 110_540.0)
 
 
+def lonlat(x, y):
+    """Inverse of ``metres``."""
+    x, y = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
+    return (STATION[0] + x / (111_320.0 * math.cos(math.radians(STATION[1]))),
+            STATION[1] + y / 110_540.0)
+
+
+# --- GSI centrelines ---------------------------------------------------------------------------
+
+GSI_TILE = "https://cyberjapandata.gsi.go.jp/xyz/{layer}/16/{x}/{y}.geojson"
+# Box around the district (south, west, north, east) for the GSI tiles.
+GSI_BOX = (35.755, 140.228, 35.872, 140.300)
+
+
+def gsi_lines(layer, cache=None):
+    """Every feature of a GSI z16 vector layer over the district box: ``experimental_rvrcl``
+    (river / channel centrelines, incl. narrow channels 細河川) or ``experimental_rdcl``
+    (road centrelines). ``cache``: a JSON file of {layer: features} from an earlier fetch."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    if cache and os.path.exists(cache):
+        with open(cache, encoding="utf-8") as src:
+            stored = json.load(src)
+        if layer in stored:
+            return stored[layer]
+
+    def tile(lat, lon):
+        n = 2 ** 16
+        return int((lon + 180) / 360 * n), int((1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * n)
+
+    x0, y1 = tile(GSI_BOX[0], GSI_BOX[1])
+    x1, y0 = tile(GSI_BOX[2], GSI_BOX[3])
+
+    def fetch(xy):
+        url = GSI_TILE.format(layer=layer, x=xy[0], y=xy[1])
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "LearningWaterBalance-research/1.0"})
+            return json.loads(urllib.request.urlopen(req, timeout=30).read())["features"]
+        except Exception:  # noqa: BLE001  (no tile = nothing there)
+            return []
+
+    feats, seen = [], set()
+    with ThreadPoolExecutor(8) as pool:
+        for tile_feats in pool.map(fetch, [(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)]):
+            for f in tile_feats:
+                key = (f["properties"].get("rID"), json.dumps(f["geometry"]["coordinates"])[:80])
+                if key not in seen:
+                    seen.add(key)
+                    feats.append(f)
+    return feats
+
+
+def _parts(feature):
+    g = feature["geometry"]
+    return [g["coordinates"]] if g["type"] == "LineString" else list(g["coordinates"])
+
+
+def cyclic_footprint(buffer_m=250.0):
+    """Area around the cyclic parcels (Okura Fig. 1a classes), in local metres. Only
+    channels here can belong to the pool's network: non-cyclic blocks drain out of the
+    scheme (Okura Fig. 2b)."""
+    from shapely.geometry import MultiPoint
+
+    member = pd.read_csv(os.path.join(BUNDLED, "district_membership.csv"), comment="#")
+    cyc = member[member["fig1_class"].isin(["north_cyclic", "south_cyclic"])]
+    x, y = metres(cyc["lon"], cyc["lat"])
+    return MultiPoint(np.column_stack([x, y])).buffer(buffer_m)
+
+
 # --- network ---------------------------------------------------------------------------------
 
-def build_network():
+def build_network(gsi_cache=None):
     import geopandas as gpd
     from shapely.geometry import LineString, Point
 
+    from shapely.geometry import Polygon
+
     raw = overpass(OVERPASS)
-    ways = []
+    ways, lakes = [], []
     for e in raw["elements"]:
         tags = e.get("tags", {})
         if e["type"] != "way" or not e.get("geometry"):
             continue
+        if tags.get("natural") == "water":
+            ring = [(p["lon"], p["lat"]) for p in e["geometry"]]
+            if len(ring) >= 4:
+                lakes.append(Polygon(np.column_stack(metres(*zip(*ring)))).buffer(0))
+            continue
         coords = [(p["lon"], p["lat"]) for p in e["geometry"]]
         if len(coords) < 2:
             continue
-        ways.append(dict(osm_id=int(e["id"]), kind=tags["waterway"], name=tags.get("name", ""),
+        ways.append(dict(osm_id=int(e["id"]), source="osm", kind=tags["waterway"], name=tags.get("name", ""),
                          coords=coords, culvert=tags.get("tunnel") == "culvert"))
+    # GSI channel centrelines (国土基本情報): many farm and collector drains OSM lacks.
+    for f in gsi_lines("experimental_rvrcl", cache=gsi_cache):
+        p = f["properties"]
+        kind = ("river" if p.get("rivCtg") == "一級河川" else
+                "narrow_channel" if str(p.get("type", "")).startswith("細河川") else "channel")
+        for part in _parts(f):
+            if len(part) >= 2:
+                ways.append(dict(osm_id=None, gsi_id=p.get("rID"), source="gsi", kind=kind,
+                                 name=p.get("name", "") or "", coords=[tuple(c) for c in part],
+                                 culvert="地下" in str(p.get("type", ""))))
     # Connectivity through drainage channels only: natural rivers meet the drains at
     # gates and culverts, not as open joins, and would chain unrelated systems together.
     lines = [LineString(np.column_stack(metres(*zip(*w["coords"])))) for w in ways]
-    drainage = [i for i, w in enumerate(ways) if w["kind"] != "river"]
+    footprint = cyclic_footprint()
+    # Lines drawn across the open lake (flow lines, not drains) cannot carry farm drainage.
+    lake = gpd.GeoSeries(lakes).union_all() if lakes else None
+    in_lake = lambda line: lake is not None and line.intersection(lake).length > 0.5 * line.length
+    drainage = [i for i, w in enumerate(ways)
+                if w["kind"] != "river" and lines[i].intersects(footprint) and not in_lake(lines[i])]
     index = gpd.GeoSeries([lines[i] for i in drainage]).sindex
     adjacent = {i: set() for i in drainage}
     for a, i in enumerate(drainage):
@@ -127,23 +223,44 @@ def build_network():
             connected.add(j)
             stack.append(j)
     features = []
+
+    def add(w, coords, role, length_m):
+        props = dict(source=w["source"], osm_id=w["osm_id"], waterway=w["kind"], name=w["name"], role=role,
+                     culvert=bool(w.get("culvert")), length_m=round(length_m, 1))
+        if w["source"] == "gsi":
+            props["gsi_id"] = w.get("gsi_id")
+        features.append(dict(type="Feature", geometry=dict(type="LineString", coordinates=[list(c) for c in coords]),
+                             properties=props))
+
     for i, w in enumerate(ways):
-        role = ("main_canal" if w["osm_id"] in MAIN_CANAL_WAYS else
-                "connected_drain" if i in connected else
-                "river" if w["kind"] == "river" else "other_drain")
-        features.append(dict(
-            type="Feature", geometry=dict(type="LineString", coordinates=[list(c) for c in w["coords"]]),
-            properties=dict(osm_id=w["osm_id"], waterway=w["kind"], name=w["name"], role=role,
-                            culvert=bool(w.get("culvert")), length_m=round(lines[i].length, 1))))
+        if w["osm_id"] in MAIN_CANAL_WAYS:
+            add(w, w["coords"], "main_canal", lines[i].length)
+        elif i in connected:
+            # The pool's network stops at the cyclic area: beyond it channels run on to rivers
+            # and other outlets, and for now drainage leaves the district only at the station.
+            for part_line, role in ((lines[i].intersection(footprint), "connected_drain"),
+                                    (lines[i].difference(footprint), "other_drain")):
+                for piece in getattr(part_line, "geoms", [part_line]):
+                    if piece.is_empty or piece.geom_type != "LineString" or piece.length < 1.0:
+                        continue
+                    lon, lat = lonlat(*np.asarray(piece.coords).T)
+                    add(w, list(zip(np.round(lon, 7), np.round(lat, 7))), role, piece.length)
+        else:
+            add(w, w["coords"], "river" if w["kind"] == "river" else "other_drain", lines[i].length)
     features.append(dict(type="Feature", geometry=dict(type="Point", coordinates=list(STATION)),
                          properties=dict(role="station", name="白山甚兵衛機場 (Hakusan-Jimbee pumping station)",
                                          osm_id=1082034661, max_supply_m3_s=3.304, service_area_ha=983,
                                          in_service="April 2015 (FY2015)")))
     collection = dict(
         type="FeatureCollection",
-        attribution="Channels: © OpenStreetMap contributors (ODbL), via the Overpass API. "
+        attribution="Channels: © OpenStreetMap contributors (ODbL), via the Overpass API; GSI river / channel "
+                    "centrelines (国土地理院 ベクトルタイル 河川中心線, experimental_rvrcl). "
                     "Station: MAFF Kanto Regional Agricultural Administration Office; located on OSM + GSI aerial imagery.",
         station=list(STATION), main_canal_osm_ways=list(MAIN_CANAL_WAYS), snap_m=SNAP_M,
+        pool_network_rule="joined (within snap_m) to the main canal through drainage channels that lie "
+                          "within 250 m of cyclic parcels (Okura Fig. 2b: non-cyclic blocks drain out of the scheme) "
+                          "and not mostly across the lake (OSM 印旛沼 water area); connected channels are clipped "
+                          "to that area, so drainage leaves only at the station",
         features=features)
     with open(os.path.join(BUNDLED, "infrastructure.geojson"), "w", encoding="utf-8") as out:
         json.dump(collection, out, ensure_ascii=False)
@@ -196,8 +313,8 @@ def add_structures():
         p = f["properties"]
         if p.get("role") in ("structure", "other_pipeline"):
             continue                                    # rebuilt below
-        if f["geometry"]["type"] == "LineString":
-            p["culvert"] = p.get("osm_id") in culverts
+        if f["geometry"]["type"] == "LineString" and p.get("source", "osm") == "osm":
+            p["culvert"] = p.get("osm_id") in culverts     # GSI marks its own (人工水路（地下）)
         kept.append(f)
     for e in raw["elements"]:
         tags = e.get("tags", {})
@@ -502,9 +619,10 @@ def build_canal_depth(pdf_path):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
-    build_network()
+    gsi_cache = sys.argv[2] if len(sys.argv) > 2 else None   # optional JSON of fetched GSI tiles
+    build_membership(sys.argv[1])        # the channel network's footprint uses the membership
+    build_network(gsi_cache)
     add_structures()
-    build_membership(sys.argv[1])
     build_canal_depth(sys.argv[1])
     # Elevation needs the rebuilt paddies: run cyclic.data.paddies(refresh=True) first.
     build_elevation()

@@ -239,7 +239,7 @@ class DistrictModel(mesa.Model):
                     field_deficit_m3=float(np.dot(np.maximum(self.world.today_growth().target_depth_mm - self.world.ponding_mm, 0), self.world.area_m2)/1000))
 
     def sync_crop_calendars(self) -> None:
-        """Each paddy's crop runs on its owner's calendar (eagerness shift), so the
+        """Each paddy's crop runs on its owner's calendar (calendar_lead shift), so the
         physics' canopy/ET follow the farmer's own transplanting date."""
         shift = np.zeros(self.world.n, dtype=int)
         for fid, agent in self.farmer_agents.items():
