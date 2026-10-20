@@ -12,9 +12,7 @@
     info["season"]            # Okura WUE' / RUE / LUE, W, O, yield, stress
 
 Farmers: registered names (``abm.list_agents()``), or ``{name: share}`` for a mix.
-Collaboration: ``collaborative_share`` (0..1) makes that share of all farmers,
-whatever their type, collaborative and the rest uncollaborative; None keeps each
-farmer's own ``cooperation`` trait.
+``collaborative_share`` (0..1) sets that share of farmers to cooperation 0.95 and the rest to 0.05. None keeps each farmer's own cooperation.
 Weather: a preset name (``abm.weather.PRESETS``: drought, wet, heatwave, storm,
 dry_july, erratic) or an ``abm.weather.WeatherScenario`` you tweak.
 Staff: a registered station name or ``StationAgent`` instance, used whenever

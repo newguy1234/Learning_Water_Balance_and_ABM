@@ -8,11 +8,9 @@ from abm.farmer import BaseFarmer, NoDrainHold, in_drain_window
 
 pytestmark = pytest.mark.usefixtures("abm_builtins_only")
 
-# A plain farmer with every trait pinned (no personality noise) for exact checks.
-PINNED = dict(eagerness=0., drawdown=1., overfill=1., part_time=0., foresight=0., flow_through=0.,
-              price_sensitivity=1., wealth=0., risk_tolerance=1., knowledge=1., cooperation=0.,
-              neighbour_offset=0., labour=1., work_ethic=1., neighbour_weight=0., target_multiplier=1.,
-              schedule_jitter=0., week_swap=0.)
+# A plain farmer with the stage depth unscaled, for exact checks.
+PINNED = dict(cooperation=0., work_pattern=0., neighbour_weight=0.,
+              target_multiplier=1., schedule_jitter=0., week_swap=0.)
 
 
 def farmer(**params):
@@ -39,41 +37,44 @@ def test_register_refuses_farmers_that_do_not_inherit_base_farmer():
     assert abm.FarmerAgent is BaseFarmer
 
 
-def test_eagerness_shifts_the_crop_calendar_up_to_four_days():
-    assert farmer(eagerness=1.).calendar_shift_days == 4
-    assert farmer(eagerness=-1.).calendar_shift_days == -4
-    assert farmer(eagerness=.5).crop_day(10) == 12
-
-
-def test_traits_vary_between_farmers_of_one_kind_unless_pinned():
+def test_only_cooperation_and_work_pattern():
+    from abm.farmer import TRAIT_NAMES
+    assert TRAIT_NAMES == ("cooperation", "work_pattern")
     a, b = make_agent("steward", seed=1), make_agent("steward", seed=2)
-    assert a.traits["part_time"] != b.traits["part_time"]
-    assert make_agent("steward", seed=1, part_time=.3).traits["part_time"] == .3
+    assert a.traits["work_pattern"] != b.traits["work_pattern"]
+    assert make_agent("steward", seed=1, work_pattern=.3).traits["work_pattern"] == .3
 
 
-def test_bounds_follow_the_shifted_target():
-    early, late = farmer(eagerness=1.), farmer(eagerness=-1.)
-    day = crop.MIDSUMMER_START - 2  # early farmer is already in its mid-season drain
-    assert in_drain_window(early.crop_day(day)) and not in_drain_window(late.crop_day(day))
-    t = early.stage_target_mm({}, early.crop_day(day))
-    lower, upper = early.bounds_mm(np.array([t]), early.crop_day(day), {"bund_mm": 250.})
+def test_part_time_work_pattern_checks_on_days_off():
+    f = farmer(work_pattern=1.)
+    f.act(observation(day=20, weekday=5))
+    assert f.checked_today
+    f.act(observation(day=21, weekday=0))
+    assert not f.checked_today
+    assert f.days_to_next_check(observation(day=21, weekday=0)) == 5
+
+
+def test_midseason_drain_opens_the_lower_bound():
+    f = farmer()
+    day = crop.MIDSUMMER_START
+    t = f.stage_target_mm({}, day)
+    lower, upper = f.bounds_mm(np.array([t]), day, {"bund_mm": 250.})
     assert lower[0] == 0 and upper[0] == t
-    t = late.stage_target_mm({}, late.crop_day(day))
-    lower, upper = late.bounds_mm(np.array([t]), late.crop_day(day), {"bund_mm": 250.})
-    assert lower[0] == t - 25 and upper[0] == t + 20
+    day = 20
+    assert not in_drain_window(day)
+    t = f.stage_target_mm({}, day)
+    lower, upper = f.bounds_mm(np.array([t]), day, {"bund_mm": 250.})
+    assert lower[0] == t and upper[0] == t
 
 
-def test_fill_and_let_drop():
-    f = farmer()
+def test_tops_up_to_the_stage_depth():
     target = crop.target_depth_mm(20)
-    # Inside the band with little loss: let it drop, no request.
-    plan = f.act(observation(pond=target - 5))
-    assert plan.request[0] == 0
-    # Below the lower bound: refill to the upper bound (+ today's loss).
-    f = farmer()
-    plan = f.act(observation(pond=target - 30))
-    np.testing.assert_allclose(plan.request, target + 20 - (target - 30) + 5)
-    np.testing.assert_allclose(plan.weir, target + 20)
+    # Already above the stage depth after today's loss: no request.
+    assert farmer().act(observation(pond=target + 30)).request[0] == 0
+    # Below the stage depth: replace the deficit and today's loss.
+    plan = farmer().act(observation(pond=target - 30))
+    np.testing.assert_allclose(plan.request, 35)
+    np.testing.assert_allclose(plan.weir, target)
 
 
 def test_no_drain_hold_is_hard_even_for_a_custom_decision():
@@ -98,22 +99,6 @@ def test_extra_constraints_can_be_added():
     assert Careful(**PINNED).act(observation(day=45)).weir[0] < 250.
 
 
-def test_forecast_rain_holds_back_irrigation_for_farmers_who_trust_it():
-    wet = observation(pond=20., rain_forecast_mm=np.array([0., 30., 30., 0., 0., 0.]))
-    blind = farmer(foresight=0.).act(dict(wet)).request[0]
-    seeing = farmer(foresight=1.).act(dict(wet)).request[0]
-    assert seeing < blind
-
-
-def test_part_time_farmer_checks_on_weekends_not_while_away():
-    f = farmer(part_time=1., labour=0., work_ethic=0.)
-    f.act(observation(day=20, weekday=5))            # Saturday: checks
-    assert f.checked_today
-    f.act(observation(day=21, weekday=0))            # Monday: away
-    assert not f.checked_today
-    assert f.days_to_next_check(observation(day=21, weekday=0)) == 5  # next Saturday
-
-
 def test_days_off_vary_slightly_between_farmers_and_weeks():
     farmers = [BaseFarmer(seed=s) for s in range(200)]
     usual = {f.days_off for f in farmers}
@@ -123,22 +108,6 @@ def test_days_off_vary_slightly_between_farmers_and_weeks():
     f = farmers[0]
     weeks = {f.days_off_in_week(7 * w) for w in range(40)}
     assert f.days_off in weeks and len(weeks) > 1  # an occasional week moves a day off
-
-
-def test_flow_through_on_hot_days():
-    hot = observation(pond=20., et0_mm=6.)
-    assert farmer(flow_through=1.).act(dict(hot)).request[0] > farmer(flow_through=0.).act(dict(hot)).request[0]
-
-
-def test_price_trims_only_discretionary_water():
-    base = farmer(flow_through=1.)
-    free = base.act(observation(pond=20., et0_mm=6.)).request[0]
-    priced_farmer = farmer(flow_through=1.)
-    priced = priced_farmer.act(observation(pond=20., et0_mm=6., water_price_per_m3=1e6)).request[0]
-    essential = crop.target_depth_mm(20) - 20 + 5
-    assert priced < free
-    np.testing.assert_allclose(priced, essential, atol=1e-3)
-    assert priced_farmer.spend > 0
 
 
 def test_weir_board_spills_above_the_crest():

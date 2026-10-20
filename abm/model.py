@@ -161,8 +161,7 @@ class DistrictModel(mesa.Model):
         self._apply_collaboration()
 
     def collaborative_farmers(self) -> set[int]:
-        """Farmer ids made collaborative by SeasonConfig.collaborative_share (seeded, so the
-        same farmers are picked on every reset); empty when the share is None."""
+        """Farmer ids made collaborative by SeasonConfig.collaborative_share (seeded)."""
         share = self.world.config.collaborative_share
         n = self.world.n_farmers()
         if share is None or n == 0:
@@ -239,8 +238,7 @@ class DistrictModel(mesa.Model):
                     field_deficit_m3=float(np.dot(np.maximum(self.world.today_growth().target_depth_mm - self.world.ponding_mm, 0), self.world.area_m2)/1000))
 
     def sync_crop_calendars(self) -> None:
-        """Each paddy's crop runs on its owner's calendar (eagerness shift), so the
-        physics' canopy/ET follow the farmer's own transplanting date."""
+        """Each paddy follows the district crop calendar."""
         shift = np.zeros(self.world.n, dtype=int)
         for fid, agent in self.farmer_agents.items():
             shift[self.world.paddies_of(fid)] = int(getattr(agent.policy, "calendar_shift_days", 0))

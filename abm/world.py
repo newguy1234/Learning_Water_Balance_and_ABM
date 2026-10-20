@@ -107,9 +107,8 @@ class SeasonConfig:
     # "drought"): rain/ET0 scaling, dry spells, heatwaves, storms, jitter. When set,
     # its own ``variability`` replaces weather_variability.
     weather: object | None = None
-    # Collaboration scenario: this share (0..1) of all farmers, whatever their type, is made
-    # collaborative (cooperation 0.95, levels its water with the neighbours) and the rest
-    # uncollaborative (0.05, keeps its own level). None = every farmer keeps its own trait.
+    # This share (0..1) of farmers, any type, is set to cooperation 0.95 and the rest
+    # to 0.05. None leaves each farmer's own cooperation trait.
     collaborative_share: float | None = None
     # Volumetric water price (per m3 applied). 0 = area-based fees only (the Japanese
     # land-improvement-district norm: no marginal cost). Farmers run a pricing check
@@ -468,8 +467,7 @@ class WaterWorld:
         self.last_stress = np.zeros(self.n)
         self.etc_cum = 0.0
         self.relative_yield = np.ones(self.n)
-        # Each paddy's crop calendar shift (days ahead of the district calendar), set by
-        # its owner's eagerness (abm.model.DistrictModel keeps it in sync).
+        # Crop calendar shift in days. Farmers follow the district calendar, so this stays 0.
         self.calendar_shift_days = np.zeros(self.n, dtype=int)
         self.last_request = np.zeros(self.n)
         self.request_cum = np.zeros(self.n)

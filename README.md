@@ -4,10 +4,42 @@
 (Imbanuma / Shiroyama–Jinbee; Okura et al. 2025).
 
 **Target journal:** [*Environmental Modelling & Software*](https://www.sciencedirect.com/journal/environmental-modelling-and-software)  
-Manuscript draft: [`outputs/paper/ems_research_article.md`](outputs/paper/ems_research_article.md)  
 Reproduce every table and figure: `python scripts/ems_experiments.py`
 
-## Install
+## Quick start: run `example.py`
+
+Needs Python 3.10 or newer. From the repository root:
+
+```bash
+python -m venv .venv
+```
+
+Activate it (`.venv\Scripts\activate` on Windows, `source .venv/bin/activate` on macOS/Linux), then:
+
+```bash
+pip install -r requirements.txt
+```
+
+```bash
+python example.py
+```
+
+This starts a local Solara server and opens the **ABM interface** in your browser at
+http://localhost:8770. The farmer (`my_farmer`) and station (`my_station`) defined in
+`example.py` are registered first, so they appear in the interface's menus and
+`my_station` becomes the default station staff. Stop the server with Ctrl+C.
+
+To open the **cyclic interface** instead (forecasters and ratio finders, at
+http://localhost:8766), change `ui = "abm"` to `ui = "cyclic"` near the bottom of
+`example.py` and run it again.
+
+`example.py` is also the template for your own agents: copy one of its four
+classes, give it a new registered name, and it shows up in the matching interface.
+
+The data the model needs ships in `data/` and `cyclic/bundled/`; nothing is
+downloaded on first run.
+
+## Install as a package
 
 ```bash
 # Recommended for the EMS software paper (Gymnasium + spatial + Copernicus):
@@ -253,28 +285,11 @@ Section 7, Tables 5-6 (pages 10-12): `maximiser`, `survivalist`, `steward`,
 The example launcher and both UIs use these by default; station policies remain
 separate. These names replace the previous ABM names in scripts and saved rosters.
 
-**Collaboration and the neighbour water level:** every farmer carries a
-`cooperation` level (0–1; archetypes from their traits, other farmers from
-params, default 0.5) and a `neighbour_offset` (−1 drier … +1 wetter than its
-neighbours; archetype bases in `abm.agents.NEIGHBOUR_OFFSET`). Each paddy's
-target drifts softly by
-`cooperation·(neighbour level − target) + (1 − cooperation)·offset·15 mm`:
-collaborative farmers level their water with the (up to 4) neighbouring paddies,
-uncollaborative ones hold their own preferred level. Weight 0.3, tanh-capped at
-20 mm, neighbour level remembered at 30 %/day, so targets move at most ±6 mm.
-`SeasonConfig(collaborative_share=0.7)` / `AbmEnv(collaborative_share=0.7)`
-makes that share of all farmers (any type, seeded choice) collaborative (0.95)
-and the rest uncollaborative (0.05); cooperation still evolves through learning
-afterwards. Custom farmers use it via `self.neighbour_target(obs, target)`
-(see `my_farmer` in `example.py`).
-
-Each farmer has persistent, seed-reproducible wealth, experience, knowledge,
-labour, cooperation, work ethic and risk traits, plus descriptive age. Traits
-influence water targets, drainage capacity, coordination and monitoring cadence.
-Age does not prescribe a behaviour. Between monitoring visits, farmers retain
-inlet/outlet settings. Farmers learn from water scarcity and crop stress, and can
-copy the previous day's inlet/outlet settings and target strategy of a better
-performing neighbouring owner. Neighbours are owners of adjacent paddies,
+Each farmer has two traits: `cooperation` (0–1; levels the pond with neighbours and
+holds back when the canal is short) and `work_pattern` (0 full time, home on
+working days; 1 part time, home only on days off). The stage-depth multiplier
+stays at 1 unless a scenario changes it. Learning and social copying are off.
+Between visits, farmers leave the inlet and weir where they were. Neighbours are owners of adjacent paddies,
 excluding self and duplicates. Every farmer reads the same frozen daily snapshot;
 there is no same-day learning cascade from iteration order. Reset clears memory
 and reconstructs the same initial population for the same seed.
@@ -283,13 +298,11 @@ and reconstructs the same initial population for the same seed.
 not fitted numerical parameters. `ARCHETYPES` in `abm/agents.py` contains editable
 scenario defaults. Learning uses an observable score (crop stress coefficient
 minus irrigation and drainage penalties), not measured profit or a validated
-causal yield effect. Fertiliser, wealth accounting and economic incentives are
-not simulated. The opportunist responds to immediately available water. The
-adaptive experimenter explores bounded variations in irrigation demand; it does
-not invoke a separate optimisation service. `learning_rate=0` disables adaptation
-and exploration; `social_influence=0` disables copying. Individual traits,
-`memory`, `copied_from`, and `copy_events` are accessible on each farmer policy;
-the Run UI reports aggregate copying events and cooperation.
+causal yield effect. Fertiliser and economic incentives are not simulated.
+`learning_rate=0` and `social_influence=0` are the defaults, so adaptation and
+copying stay off. `memory`,
+`copied_from`, and `copy_events` are accessible on each farmer policy;
+the Run UI reports aggregate copying events.
 
 ### Farmer performance tables
 
@@ -298,8 +311,8 @@ The Metrics tab shows equal-weight averages per farmer personality and the top
 The ranking uses the mean daily social-learning score:
 `Ks - 0.15 * irrigation_mm / 40 - 0.05 * drainage_mm / 30` (higher is better).
 Tables include estimated relative yield to date, mean Ks, cumulative irrigation,
-drainage and pool capture, percentage of station supply used, copying events,
-and cooperation. This is a model score, not profit or measured yield. A zero
+drainage and pool capture, percentage of station supply used, and copying events.
+This is a model score, not profit or measured yield. A zero
 supply denominator displays as missing, not infinite efficiency. A change in
 ownership or personality starts a new cohort without relabelling past results;
 compare periods with similar lengths. Reset clears the records.
@@ -317,5 +330,5 @@ The UI's empty personality selection means all types. Choose `rank_by` from
 Daily records preserve paddy-status/block strata, which are area-weighted back
 into a single farm-day for combined selections. A mixed holding contributes only
 its cyclic parcels to the cyclic leaderboard and only its non-cyclic parcels to
-the non-cyclic leaderboard. Copying events and cooperation are farmer-level
+the non-cyclic leaderboard. Copying events are farmer-level
 context repeated in split views; do not add them across status leaderboards.

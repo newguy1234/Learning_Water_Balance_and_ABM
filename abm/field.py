@@ -42,7 +42,7 @@ class FieldSession:
     # jitters rain/ET0 day to day so weather differs each seed/reset — an input
     # no farmer or station policy controls. See world.perturb_weather.
     weather_variability: float = 0.0
-    # Share of farmers made collaborative (None = each keeps its own cooperation trait).
+    # Share of farmers set to cooperation 0.95 (None = each keeps its own trait).
     collaborative_share: float | None = None
     model: DistrictModel | None = field(default=None, repr=False)
     last_station_state: str = "wait"

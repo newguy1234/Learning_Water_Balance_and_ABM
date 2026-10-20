@@ -511,8 +511,7 @@ def SettingsTab():
             if learned:
                 solara.Markdown(
                     f"**Social learning:** {sum(p.copy_events for p in learned)} copying events · "
-                    f"{sum(p.copied_from is not None for p in learned)} farmers copied on the latest day · "
-                    f"mean cooperation {np.mean([p.cooperation for p in learned]):.2f}"
+                    f"{sum(p.copied_from is not None for p in learned)} farmers copied on the latest day"
                 )
             for name in roster:
                 pct = round(weights.get(name, 0.0) * 100.0)
@@ -571,7 +570,7 @@ def _farmer_table_html(frame):
         "score": "Balanced score", "relative_yield_pct": "Yield (%)", "mean_ks": "Mean Ks",
         "irrigation_mm": "Irrigation (mm)", "drainage_mm": "Drainage (mm)",
         "capture_mm": "Pool capture (mm)", "sent_used_pct": "Supply used (%)",
-        "copying_events": "Copies", "cooperation": "Cooperation",
+        "copying_events": "Copies",
     }
     table = frame[[c for c in labels if c in frame]].rename(columns=labels)
     return '<div style="overflow-x:auto">' + table.to_html(
@@ -608,7 +607,7 @@ def MetricsTab():
         solara.Markdown(
             "Filters combine. A farmer owning both statuses is evaluated separately on each "
             "subset of paddies. Within-farm metrics are area-weighted; type averages give each "
-            "farm period equal weight. Copying and cooperation describe the farmer, not individual paddies. "
+            "farm period equal weight. Copying describes the farmer, not individual paddies. "
             "Depths accumulate across the displayed days; yield is estimated to date."
         )
         solara.Markdown(

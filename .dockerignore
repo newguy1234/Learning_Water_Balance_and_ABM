@@ -1,0 +1,10 @@
+.git
+.venv
+.venv-*
+outputs
+.presentation-build
+.pytest_cache
+.claude
+**/__pycache__
+*.pyc
+data/copernicus

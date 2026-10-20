@@ -10,41 +10,37 @@ weir board (``weir``: pond above the crest spills out through the outlet on its 
 Common personality variables (``TRAITS``) live on every farmer as ``self.traits``. Each is
 drawn once per farmer: the class's ``traits_mean`` (or the trait's default) plus seeded
 noise of ``trait_variability`` × the trait's range, so no two farmers of one kind are
-identical. A trait given explicitly as a param (``make_agent(name, part_time=.8)`` or in
+identical. A trait given explicitly as a param (``make_agent(name, some_trait=.8)`` or in
 a class's ``defaults``) is used exactly, without noise.
+
+Two traits. ``cooperation`` levels the pond with neighbours and holds back when the
+canal is short. ``work_pattern`` is 0 for full-time (home on working days) and 1 for
+part-time (away on working days, home on days off). Everyone follows the district
+stage depth. Adaptation and social copying are off unless a scenario turns them on.
 
 Default day of a BaseFarmer (every step is a method a subclass may override):
 
-  crop calendar   crop_day = day + calendar_shift_days; eagerness ±1 → ±max_shift_days, so
-                  the stage target, drain windows and the crop's own growth (canopy/ET in
-                  the physics) run early or late for this farmer's paddies
-  target          crop.target_depth_mm(crop_day) × target_multiplier + a risk buffer,
-                  drifted softly toward the neighbours (``neighbour_target``)
-  bounds          lower = target − drawdown·lower_gap_mm, upper = target + overfill·upper_gap_mm;
-                  in the mid-season / harvest drain windows lower = 0 and upper = target
-  checking        a farmer only looks at its paddies on check days: its days off always, and
-                  on working days when at home (part_time = share of them away) and its
-                  monitor interval has passed; never more than 7 days without a look.
-                  Days off vary a little: Sat+Sun for most, a day earlier or later for
-                  some (schedule_jitter), and some weeks one moves (week_swap)
-  fill and drop   on a check day it refills to the upper bound only if the pond would
-                  otherwise fall below the lower bound before its next check; the refill
-                  stops short by the rain it trusts in the forecast (foresight = how many
-                  days ahead, trust decaying with lead time); if one fill cannot last
-                  until the next check it leaves the inlet trickling (standing inlet)
-  flow-through    on hot days (ET0 ≥ heat_et0_mm) and while away, a flow_through farmer
-                  leaves extra water running in; it passes over the weir back to the drain
-  weir board      crest = upper bound (target in drain windows, bund during holds)
-  pricing         with a volumetric price, water above the essential fill (overfill,
-                  flow-through, standing slack) is cut by 1 / (1 + sensitivity·price/ref)
+  crop calendar   the district stage target, drain windows and canopy/ET. Every farmer
+                  follows the same calendar
+  target          crop.target_depth_mm(day) × target_multiplier, drifted softly toward
+                  the neighbours in proportion to cooperation
+  bounds          the stage depth itself; in the mid-season / harvest drain windows the
+                  lower bound is 0 and the upper bound is the stage depth
+  checking        days off always, and working days when the work pattern leaves the
+                  farmer at home. A full-time farmer looks every day. A part-time farmer
+                  looks on days off. Never more than 7 days without a look
+  refill          on a check day, top the pond up to the stage depth if it would otherwise
+                  be below that depth at the next look. Today's rain and seepage count in
+                  full. Cooperation trims the request when the canal is short
+  weir board      crest = stage depth (bund during holds)
   hard rules      apply ≤ sent, drain ≤ stock, then every ``Constraint`` (e.g. no drainage
                   for 7 days after herbicide) — enforced after the subclass's decision
 
 Subclass freely: set ``traits_mean`` / ``defaults``, override any hook (``stage_target_mm``,
-``bounds_mm``, ``checks_today``, ``expected_rain_mm``, ``plan`` …), or add constraints::
+``bounds_mm``, ``checks_today``, ``plan`` …), or add constraints::
 
     class MyFarmer(abm.BaseFarmer):
-        traits_mean = dict(part_time=.9, flow_through=.6)
+        traits_mean = dict(cooperation=.2, work_pattern=1.)
         constraints = abm.BaseFarmer.constraints + (abm.NoDrainHold("fertiliser", 40, 3),)
 """
 
@@ -66,35 +62,17 @@ class Trait:
     meaning: str
 
 
-# Common personality variables every farmer carries (self.traits). Order is fixed: it
-# sets the seeded draw, so appending a trait never changes an existing farmer's others.
+# Two traits only. Order is fixed: it sets the seeded draw.
 TRAITS: tuple[Trait, ...] = (
-    Trait("wealth", 0, 1, .5, "capital; softens the response to a water price"),
-    Trait("experience", 0, 1, .5, "damps the reaction to a single bad outcome"),
-    Trait("knowledge", 0, 1, .5, "counts seepage and today's rain into the refill"),
-    Trait("labour", 0, 1, .5, "hands available; with work_ethic sets the monitor interval"),
     Trait("cooperation", 0, 1, .5, "levels water with neighbours; holds back when the canal is short"),
-    Trait("work_ethic", 0, 1, .5, "with labour sets how many days between looks"),
-    Trait("risk_tolerance", 0, 1, .5, "0 keeps a risk buffer above the stage target"),
-    Trait("neighbour_offset", -1, 1, 0., "prefers to sit wetter (+) or drier (-) than the neighbours"),
-    Trait("eagerness", -1, 1, 0., "+1 runs the crop calendar max_shift_days early, -1 as many late"),
-    Trait("drawdown", 0, 1, .5, "how far below target the pond may fall before a refill (lower bound)"),
-    Trait("overfill", 0, 1, .5, "how far above target a refill goes (upper bound, weir crest)"),
-    Trait("part_time", 0, 1, 0., "share of working days away from the farm; days off always home"),
-    Trait("foresight", 0, 1, .5, "how many days of rain forecast it acts on (× max_forecast_days)"),
-    Trait("flow_through", 0, 1, .2, "leaves the inlet running (kakenagashi) on hot days and while away"),
-    Trait("price_sensitivity", 0, 1, .5, "how much a volumetric water price trims discretionary water"),
+    Trait("work_pattern", 0, 1, 0., "0 full time, home on working days; 1 part time, home only on days off"),
 )
 TRAIT_NAMES = tuple(t.name for t in TRAITS)
 TRAIT_RANGE = {t.name: (t.low, t.high) for t in TRAITS}
 
-# Soft neighbour-relative target (BaseFarmer.neighbour_target). cooperation and
-# neighbour_offset are traits; these are the shared tuning knobs.
+# Soft neighbour-relative target (BaseFarmer.neighbour_target).
 NEIGHBOUR_DEFAULTS = dict(
-    cooperation=.5,              # 0..1: 1 levels with the neighbours, 0 follows its own offset
-    neighbour_offset=0.,         # -1..1: drier (-) or wetter (+) than the neighbours' mean
-    neighbour_offset_mm=15.,     # offset ±1 -> ±15 mm relative to the neighbours
-    neighbour_weight=.3,         # share of the way the target moves toward that level
+    neighbour_weight=.3,         # share of the way the target moves toward the neighbour level
     neighbour_max_shift_mm=20.,  # tanh cap on the pull before weighting
     neighbour_memory=.3,         # daily update rate of the remembered neighbour level
 )
@@ -103,22 +81,12 @@ NEIGHBOUR_DEFAULTS = dict(
 FARMER_DEFAULTS = dict(
     seed=0,
     trait_variability=.08,  # personality spread: noise sd as a share of each trait's range
-    target_multiplier=1.,   # scales the stage target (learned by PersonalityFarmer)
-    max_shift_days=4,       # eagerness ±1 -> crop calendar ± this many days
-    lower_gap_mm=25.,       # drawdown 1 -> refill trigger this far below target
-    upper_gap_mm=20.,       # overfill 1 -> refill level this far above target
-    risk_buffer_mm=8.,      # risk_tolerance 0 -> target raised by this much
-    max_forecast_days=4,    # foresight 1 -> acts on rain up to this many days ahead
-    forecast_decay=.8,      # trust in rain forecast k days ahead = decay ** k
-    heat_et0_mm=5.,         # ET0 at or above this is a hot day
-    heat_flow_mm=20.,       # flow_through 1 -> extra mm/day run through on hot days
-    away_slack=.3,          # flow_through 1 -> standing inlet 30% above the expected loss
-    price_ref_per_m3=20.,   # price that halves a fully price-sensitive farmer's extras
+    target_multiplier=1.,   # scales the stage target; 1 is the district stage depth
     freeboard_mm=20.,       # weir crest never set above bund − freeboard
     schedule_jitter=.3,     # share of farmers whose days off sit a day off Sat+Sun
     week_swap=.15,          # chance a week moves one of its days off to another day
     scarcity_cut=.25,       # cooperation 1 trims its request 25% when the canal is short
-    **{k: v for k, v in NEIGHBOUR_DEFAULTS.items() if k not in TRAIT_NAMES},
+    **NEIGHBOUR_DEFAULTS,
 )
 
 
@@ -215,8 +183,6 @@ class BaseFarmer:
             else:
                 value = float(self.traits_mean.get(t.name, t.default)) + noise
             self.traits[t.name] = float(np.clip(value, t.low, t.high))
-        # Age is descriptive; it does not deterministically assign behaviour.
-        self.traits["age"] = int(rng.integers(25, 76))
         # Usual weekly days off: Sat+Sun, or for some farmers the pair a day earlier/later.
         # Drawn from its own stream so the traits above keep their values.
         week = np.random.default_rng([int(merged["seed"]) & 0xFFFFFFFF, 23])
@@ -225,7 +191,7 @@ class BaseFarmer:
         # The personality as drawn; self.traits may drift (learning) during a season.
         self.initial_traits = dict(self.traits)
         self.target_multiplier = float(merged["target_multiplier"])
-        self.monitor_interval = max(1, int(round(1 + 4 * (1 - self.traits["labour"]) * (1 - self.traits["work_ethic"]))))
+        self.monitor_interval = 1
         self.neighbour_level = {}   # paddy id -> remembered neighbour ponding (mm)
         self.last_checked_day = -1
         self.checked_today = False
@@ -236,7 +202,6 @@ class BaseFarmer:
         self.last_upper_mm = None
         self.last_request_mm = None
         self.last_demand_mm = 0.
-        self.price_factor = 1.
         self.spend = 0.
         self.state = "wait"
 
@@ -252,18 +217,17 @@ class BaseFarmer:
 
     @property
     def cooperation_level(self) -> float:
-        """This farmer's collaboration (0..1), whatever kind of farmer it is."""
         return self.cooperation
 
     def set_cooperation(self, value: float) -> None:
-        """Set this farmer's collaboration (0..1) — used by collaboration scenarios."""
+        """Set collaboration (0..1). Used by collaboration scenarios."""
         self.cooperation = value
         self.params["cooperation"] = self.cooperation
 
     @property
     def calendar_shift_days(self) -> int:
-        """Days this farmer runs ahead (+) or behind (-) the district crop calendar."""
-        return int(round(self.params["max_shift_days"] * self.traits["eagerness"]))
+        """Every farmer follows the district crop calendar."""
+        return 0
 
     def crop_day(self, day: int) -> int:
         return int(day) + self.calendar_shift_days
@@ -271,21 +235,17 @@ class BaseFarmer:
     # --- hooks a subclass may override -------------------------------------------------------
 
     def stage_target_mm(self, obs: dict, crop_day: int) -> float:
-        """Ideal pond on this farmer's own calendar, scaled by its multiplier and risk buffer."""
-        target = crop.target_depth_mm(crop_day) * self.target_multiplier
-        if not in_drain_window(crop_day):
-            target += self.params["risk_buffer_mm"] * (1 - self.traits["risk_tolerance"])
-        return float(target)
+        """Stage ponding depth on the district calendar, scaled by this farmer's multiplier."""
+        return float(crop.target_depth_mm(crop_day) * self.target_multiplier)
 
     def bounds_mm(self, target: np.ndarray, crop_day: int, obs: dict) -> tuple[np.ndarray, np.ndarray]:
-        """(lower, upper) around the target: refill trigger and refill level."""
+        """Hold the stage depth. Mid-season and harvest drains open the lower bound."""
         target = np.asarray(target, dtype=float)
         ceiling = float(obs.get("bund_mm", np.inf)) - self.params["freeboard_mm"]
+        level = np.minimum(np.maximum(target, 0.), ceiling)
         if in_drain_window(crop_day):
             return np.zeros_like(target), np.minimum(target, ceiling)
-        lower = np.maximum(target - self.traits["drawdown"] * self.params["lower_gap_mm"], 0.)
-        upper = np.minimum(target + self.traits["overfill"] * self.params["upper_gap_mm"], ceiling)
-        return lower, np.maximum(upper, lower)
+        return level, level
 
     def _draw(self, *keys: int) -> float:
         return float(np.random.default_rng([int(self.params["seed"]) & 0xFFFFFFFF, *map(int, keys)]).random())
@@ -308,10 +268,10 @@ class BaseFarmer:
         return weekday is not None and int(weekday) in self.days_off_in_week(day)
 
     def is_home(self, day: int, weekday: int | None) -> bool:
-        """Days off always; a working day unless this part-timer is away (seeded per day)."""
-        if weekday is None or self.is_day_off(day, weekday) or self.traits["part_time"] <= 0:
+        """Days off always. On a working day, a part-timer is away in proportion to work_pattern."""
+        if weekday is None or self.is_day_off(day, weekday) or self.traits["work_pattern"] <= 0:
             return True
-        return self._draw(day, 17) >= self.traits["part_time"]
+        return self._draw(day, 17) >= self.traits["work_pattern"]
 
     def would_check(self, day: int, weekday: int | None, last: int) -> bool:
         if last < 0 or day - last >= 7:
@@ -335,25 +295,7 @@ class BaseFarmer:
         n = len(obs["owned_ids"])
         et = np.asarray(obs.get("owned_et_demand_mm", np.full(n, float(obs["et_mm"]))), dtype=float)
         seepage = np.asarray(obs.get("owned_seepage_mm", np.zeros(n)), dtype=float)
-        return et + self.traits["knowledge"] * seepage
-
-    def expected_rain_mm(self, obs: dict) -> float:
-        """Forecast rain after today that it trusts (foresight days, decaying with lead)."""
-        forecast = np.asarray(obs.get("rain_forecast_mm", []), dtype=float)
-        horizon = int(round(self.params["max_forecast_days"] * self.traits["foresight"]))
-        decay = float(self.params["forecast_decay"])
-        return float(sum(forecast[k] * decay ** k for k in range(1, min(horizon, forecast.size - 1) + 1)))
-
-    def is_hot(self, obs: dict) -> bool:
-        return float(obs.get("et0_mm", 0.)) >= self.params["heat_et0_mm"]
-
-    def price_multiplier(self, obs: dict) -> float:
-        """Pricing check: share of discretionary water kept at today's volumetric price."""
-        price = float(obs.get("water_price_per_m3", 0.) or 0.)
-        if price <= 0:
-            return 1.
-        pressure = self.traits["price_sensitivity"] * (1 - .5 * self.traits["wealth"])
-        return 1. / (1. + pressure * price / max(self.params["price_ref_per_m3"], 1e-9))
+        return et + seepage
 
     def learn(self, obs: dict) -> None:
         """Update beliefs on a check day before planning (PersonalityFarmer: social learning)."""
@@ -363,22 +305,19 @@ class BaseFarmer:
 
     # --- the default decision ----------------------------------------------------------------
 
-    def neighbour_target(self, obs: dict, target, offset: float | None = None,
-                         cooperation: float | None = None) -> np.ndarray:
-        """Per owned paddy: ``target`` drifted softly by the farmer's stance on its neighbours.
+    def neighbour_target(self, obs: dict, target, cooperation: float | None = None) -> np.ndarray:
+        """Per owned paddy: ``target`` drifted softly toward the neighbour pond.
 
-            pull = cooperation · (neighbour level − target)        collaborative: level up
-                 + (1 − cooperation) · offset · neighbour_offset_mm  uncollaborative: own way
+            pull = cooperation · (neighbour level − target)
 
         The neighbour level is a running memory of the mean ponding on each paddy's (up to
         4) cardinal neighbours. The pull is capped by a tanh and weighted, so the target
-        moves only part of the way. ``offset``/``cooperation`` default to the traits.
+        moves only part of the way. ``cooperation`` defaults to the trait.
         """
         p = {**NEIGHBOUR_DEFAULTS, **self.params}
         ids = np.asarray(obs.get("owned_ids", np.arange(len(obs["ponding_mm"]))), dtype=int)
         pond = np.asarray(obs.get("owned_ponding_mm", np.asarray(obs["ponding_mm"])[ids]), dtype=float)
         neighbour_mean = np.asarray(obs.get("neighbour_mean_mm", pond), dtype=float)
-        offset = float(self.traits["neighbour_offset"] if offset is None else offset)
         cooperation = float(np.clip(self.cooperation if cooperation is None else cooperation, 0, 1))
         memory = float(np.clip(p["neighbour_memory"], 0, 1))
         level = np.array([
@@ -387,7 +326,7 @@ class BaseFarmer:
         self.neighbour_level.update(zip((int(i) for i in ids), level))
         target = np.broadcast_to(np.asarray(target, dtype=float), ids.shape)
         cap = max(float(p["neighbour_max_shift_mm"]), 1e-6)
-        pull = cooperation * (level - target) + (1 - cooperation) * offset * p["neighbour_offset_mm"]
+        pull = cooperation * (level - target)
         shift = cap * np.tanh(pull / cap)
         return np.maximum(target + float(p["neighbour_weight"]) * shift, 0.)
 
@@ -415,36 +354,20 @@ class BaseFarmer:
 
         loss = self.daily_loss_mm(obs)
         gap = self.days_to_next_check(obs)
-        rain_now = self.traits["knowledge"] * float(obs["rain_mm"])
-        rain_ahead = self.expected_rain_mm(obs)
-        # Fill and let drop: refill only if the pond would sink below the lower bound
-        # before the next look; leave room behind the board for the rain it expects.
-        projected = pond + rain_now + rain_ahead - loss * gap
+        rain_now = float(obs["rain_mm"])
+        projected = pond + rain_now - loss * gap
         refill = projected < lower
-        fill_to = np.maximum(upper - rain_ahead, lower)
-        fill = np.where(refill, np.maximum(fill_to - pond - rain_now + loss, 0.), 0.)
-        essential = np.where(refill, np.maximum(np.minimum(target, fill_to) - pond - rain_now + loss, 0.), 0.)
-        # Cannot last until the next look on one fill: leave the inlet trickling.
-        trickle = np.where(refill, np.maximum(lower + loss * gap - fill_to - rain_ahead, 0.) / gap, 0.)
-        if gap > 1:
-            slack = self.traits["flow_through"] * self.params["away_slack"] * loss
-        else:
-            slack = np.zeros(n)
-        hot = self.is_hot(obs) and not in_drain_window(cd)
-        flow = np.full(n, self.traits["flow_through"] * self.params["heat_flow_mm"] if hot else 0.)
-        scarce = float(sent.sum()) < float((fill + flow).sum())
+        fill = np.where(refill, np.maximum(upper - pond - rain_now + loss, 0.), 0.)
+        trickle = np.where(refill, np.maximum(lower + loss * gap - upper - rain_now, 0.) / gap, 0.)
+        scarce = float(sent.sum()) < float(fill.sum())
         fill = fill * (1 - self.params["scarcity_cut"] * self.cooperation * scarce)
-        essential = np.minimum(essential, fill)
-        # Pricing check: essential water stays, the extras shrink with the price.
-        self.price_factor = keep = self.price_multiplier(obs)
-        fill = essential + keep * (fill - essential)
-        flow, slack = keep * flow, keep * slack
-        standing = trickle + slack + (flow if gap > 1 else 0.)
-        request = fill + flow
+        standing = trickle
+        request = fill
         plan = Plan(ids, np.minimum(request, sent), np.zeros(n), upper.copy(), request,
-                    dict(checked=True, refill=refill, gap=gap, hot=hot, price_factor=keep))
+                    dict(checked=True, refill=refill, gap=gap))
         self.adjust(obs, plan)
-        self.standing_mm, self.weir_setting = np.asarray(standing, dtype=float) * np.ones(n), plan.weir.copy()
+        plan.apply = np.minimum(plan.request, sent)
+        self.standing_mm, self.weir_setting = standing, plan.weir.copy()
         self.state = "irrigating" if plan.apply.any() else ("waiting_for_water" if plan.request.any() else "wait")
         return plan
 

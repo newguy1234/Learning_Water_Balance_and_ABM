@@ -71,6 +71,7 @@ ems = [
 abm = [
   "cyclic-irrigation[ui,geo]",
   "mesa>=3.3,<4",
+  "networkx",
   "altair",
 ]
 all = [
@@ -90,7 +91,6 @@ Abm-Imbanuma-v0 = "abm.gym_env:AbmEnv"
 [project.urls]
 Documentation = "https://documentation.dataspace.copernicus.eu/"
 Copernicus = "https://dataspace.copernicus.eu/"
-Paper = "outputs/paper/ems_cyclic_env_journal.md"
 
 [tool.setuptools.packages.find]
 include = ["cyclic*", "abm*"]

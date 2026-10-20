@@ -1,5 +1,9 @@
 # Local / generated
 .venv/
+.venv-*/
+outputs/
+.presentation-build/
+*.pptx
 __pycache__/
 *.pyc
 .pytest_cache/

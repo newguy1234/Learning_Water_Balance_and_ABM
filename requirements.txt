@@ -7,6 +7,7 @@ solara==1.61.0
 ipyvuetify==1.11.3
 ipyvue==1.12.0
 mesa>=3.3,<4
+networkx
 altair
 numpy
 pandas
@@ -19,6 +20,8 @@ pyogrio
 duckdb
 matplotlib
 requests
+gymnasium>=0.29
+pytest
 # Copernicus Data Space downloads (also: pip install -e ".[copernicus]")
 # Then: python -m cyclic copernicus register
 # Optional IBM Quantum / QAOA (cyclic.quantum). Not required for the classical finder.
